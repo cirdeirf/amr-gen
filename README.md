@@ -16,8 +16,10 @@ Before using the AMR generator, you must do the following:
 1) Extract the model files `models/models.tar.gz` into the `models` directory.
 2) Extract the language model file `res/lm.binary.gz` into the `res` directory.
 3) Build the Maven project using `pom.xml`, which automatically loads all
-dependencies. Alternatively, you may set up the generator using IntelliJ IDEA as
-described below.
+dependencies except for **phrasal**. Since phrasal is not part of the Maven
+Repository it has to be built separately and placed at the specified path within
+the local Maven repository. Alternatively, you may set up the generator using
+IntelliJ IDEA as described below.
 
 ### Setup using IntelliJ IDEA
 
