@@ -11,7 +11,6 @@ import java.util.stream.Collectors;
  * Represents a vertex of a directed, acyclic graph.
  */
 public class Vertex {
-
     public String instance;
     public String mode;
     public String name;
@@ -19,7 +18,8 @@ public class Vertex {
     List<Edge> incomingEdges;
     List<Edge> outgoingEdges;
 
-    // stores n-best syntactic annotations and n-best transition predictions for this vertex
+    // stores n-best syntactic annotations and n-best transition predictions for
+    // this vertex
     public Map<String, List<Prediction>> predictions = new HashMap<>();
 
     // stores annotations actually assigned to this vertex
@@ -28,7 +28,9 @@ public class Vertex {
     static final String EMPTY_VERTEX_ID = "__empty__";
     static final String EMPTY_VERTEX_INSTANCE = "UNKNOWN";
     public static final Vertex EMPTY_VERTEX = new Vertex(EMPTY_VERTEX_INSTANCE);
-    static { EMPTY_VERTEX.setPos(EMPTY_VERTEX_INSTANCE); }
+    static {
+        EMPTY_VERTEX.setPos(EMPTY_VERTEX_INSTANCE);
+    }
 
     /**
      * Creates a new vertex.
@@ -59,13 +61,16 @@ public class Vertex {
         outgoingEdges.add(e);
     }
 
-    /** determines the POS tag of this vertex using a maximum entropy tagger on a sentence that consists only of a cleaned up version of the label of this vertex
+    /**
+     * determines the POS tag of this vertex using a maximum entropy tagger on
+     * a sentence that consists only of a cleaned up version of the label of
+     * this vertex
      * @param tagger a maximum entropy tagger
      * @return the determined POS tag
      */
     public String getPos(MaxentTagger tagger) {
-        String clearedInstance = instance.replaceAll("[\"\']","");
-        if(clearedInstance.matches(".*-[0-9]+")) {
+        String clearedInstance = instance.replaceAll("[\"\']", "");
+        if (clearedInstance.matches(".*-[0-9]+")) {
             clearedInstance = instance.substring(0, instance.lastIndexOf("-"));
         }
         String taggedInstance = tagger.tagString(clearedInstance).trim();
@@ -73,8 +78,9 @@ public class Vertex {
     }
 
     /**
-     * sets the POS tag of this vertex to be the simplified version (according to {@link PosHelper#mapPos(String, boolean)}
-     * of the one returned by {@link Vertex#getPos(MaxentTagger)}
+     * sets the POS tag of this vertex to be the simplified version (according
+     * to {@link PosHelper#mapPos(String, boolean)} of the one returned by
+     * {@link Vertex#getPos(MaxentTagger)}
      * @param tagger a maximum entropy tagger
      */
     public void setSimplifiedPos(MaxentTagger tagger) {
@@ -82,14 +88,15 @@ public class Vertex {
     }
 
     /**
-     * sets the POS tag of this vertex to the simplified version (according to {@link PosHelper#mapPos(String, boolean)}) of the POS tag given as a string
+     * sets the POS tag of this vertex to the simplified version (according to
+     * {@link PosHelper#mapPos(String, boolean)}) of the POS tag given as a
+     * string
      * @param pos the POS tag in unsimplified form
      */
     public void setSimplifiedPos(String pos) {
-        if(pos == null) {
+        if (pos == null) {
             this.setPos("UNKNOWN");
-        }
-        else {
+        } else {
             this.setPos(PosHelper.mapPos(pos, isPropbankEntry()));
         }
     }
@@ -98,8 +105,8 @@ public class Vertex {
      * @return the instance edge of this vertex as described in the thesis
      */
     public Edge getInstanceEdge() {
-        for(Edge e: outgoingEdges) {
-            if(e.label.equals(instance)) {
+        for (Edge e : outgoingEdges) {
+            if (e.label.equals(instance)) {
                 return e;
             }
         }
@@ -111,8 +118,8 @@ public class Vertex {
      */
     public int subtreeSize() {
         int subtreeSize = 1;
-        for(Edge e: outgoingEdges) {
-            if(e.getTo() != Vertex.EMPTY_VERTEX) {
+        for (Edge e : outgoingEdges) {
+            if (e.getTo() != Vertex.EMPTY_VERTEX) {
                 subtreeSize += e.getTo().subtreeSize();
             }
         }
@@ -120,46 +127,55 @@ public class Vertex {
     }
 
     /**
-     * Removes all but one incoming edge from this vertex to ensure that the corresponding AMR graph is a tree as soon as this method has been applied
-     * to all vertices. This method implements the DELETE-REENTRANCE transition described in the paper with the minor difference that it does not remove
+     * Removes all but one incoming edge from this vertex to ensure that the
+     * corresponding AMR graph is a tree as soon as this method has been applied
+     * to all vertices. This method implements the DELETE-REENTRANCE transition
+     * described in the paper with the minor difference that it does not remove
      * edges one by one, but all at once.
      */
     public void convertToTree() {
-        if(incomingEdges.size() <= 1) return;
+        if (incomingEdges.size() <= 1)
+            return;
 
         int minDistToRoot = 10;
         List<Edge> minDistEdges = new ArrayList<>();
 
-        for(Edge parentEdge: incomingEdges) {
+        for (Edge parentEdge : incomingEdges) {
             Vertex currentVertex = parentEdge.getFrom();
             int distanceToRoot = 0;
-            while(!currentVertex.getIncomingEdges().isEmpty()) {
+            while (!currentVertex.getIncomingEdges().isEmpty()) {
                 distanceToRoot++;
-                currentVertex = currentVertex.getIncomingEdges().get(0).getFrom();
-                if(distanceToRoot > minDistToRoot) break;
+                currentVertex =
+                    currentVertex.getIncomingEdges().get(0).getFrom();
+                if (distanceToRoot > minDistToRoot)
+                    break;
             }
 
-            if(distanceToRoot < minDistToRoot) {
+            if (distanceToRoot < minDistToRoot) {
                 minDistToRoot = distanceToRoot;
                 minDistEdges.clear();
                 minDistEdges.add(parentEdge);
-            }
-            else if(distanceToRoot == minDistToRoot){
+            } else if (distanceToRoot == minDistToRoot) {
                 minDistEdges.add(parentEdge);
             }
         }
 
-        Set<Edge> possEdges = minDistEdges.stream().filter(e -> Arrays.asList(":poss",":wiki").contains(e.label)).collect(Collectors.toSet());
-        if(possEdges.size() != minDistEdges.size()) {
+        Set<Edge> possEdges =
+            minDistEdges.stream()
+                .filter(e -> Arrays.asList(":poss", ":wiki").contains(e.label))
+                .collect(Collectors.toSet());
+        if (possEdges.size() != minDistEdges.size()) {
             minDistEdges.removeAll(possEdges);
         }
 
-        Set<Edge> invEdges = minDistEdges.stream().filter(e -> e.label.endsWith("-of")).collect(Collectors.toSet());
-        if(invEdges.size() != minDistEdges.size()) {
+        Set<Edge> invEdges = minDistEdges.stream()
+                                 .filter(e -> e.label.endsWith("-of"))
+                                 .collect(Collectors.toSet());
+        if (invEdges.size() != minDistEdges.size()) {
             minDistEdges.removeAll(invEdges);
         }
 
-        if(minDistEdges.isEmpty()) {
+        if (minDistEdges.isEmpty()) {
             minDistEdges = new ArrayList<>(incomingEdges);
         }
 
@@ -178,11 +194,10 @@ public class Vertex {
      * Removes all outgoing edges with label :wiki.
      */
     public void removeWikiTags() {
-
         Set<Edge> removableEdges = new HashSet<>();
 
-        for(Edge e: outgoingEdges) {
-            if(e.getLabel().toLowerCase().equals(":wiki")) {
+        for (Edge e : outgoingEdges) {
+            if (e.getLabel().toLowerCase().equals(":wiki")) {
                 removableEdges.add(e);
             }
         }
@@ -190,12 +205,13 @@ public class Vertex {
     }
 
     /**
-     * @return all vertices of the subgraph induced by this vertex in bottom-up order.
+     * @return all vertices of the subgraph induced by this vertex in bottom-up
+     * order.
      */
     public List<Vertex> getVerticesBottomUp() {
         List<Vertex> ret = new ArrayList<>();
-        for(Edge outEdge: getOutgoingEdges()) {
-            if(!outEdge.isInstanceEdge()) {
+        for (Edge outEdge : getOutgoingEdges()) {
+            if (!outEdge.isInstanceEdge()) {
                 ret.addAll(outEdge.getTo().getVerticesBottomUp());
             }
         }
@@ -204,12 +220,13 @@ public class Vertex {
     }
 
     /**
-     * @return all edges of the subgraph induced by this vertex in bottom-up order.
+     * @return all edges of the subgraph induced by this vertex in bottom-up
+     * order.
      */
     public List<Edge> getEdgesBottomUp() {
         List<Edge> ret = new ArrayList<>();
-        for(Edge outEdge: getOutgoingEdges()) {
-            if(!outEdge.isInstanceEdge()) {
+        for (Edge outEdge : getOutgoingEdges()) {
+            if (!outEdge.isInstanceEdge()) {
                 ret.add(outEdge);
                 ret.addAll(outEdge.getTo().getEdgesBottomUp());
             }
@@ -234,7 +251,11 @@ public class Vertex {
     }
 
     public boolean isSpecialNode() {
-        return !isTranslatable() || Arrays.asList("-", "+", "interrogative", "imperative", "expressive").contains(instance);
+        return !isTranslatable()
+            || Arrays
+                   .asList(
+                       "-", "+", "interrogative", "imperative", "expressive")
+                   .contains(instance);
     }
 
     public boolean isLink() {
@@ -250,7 +271,7 @@ public class Vertex {
     }
 
     public String getClearedInstance() {
-        return instance.replaceAll("-[0-9]+","");
+        return instance.replaceAll("-[0-9]+", "");
     }
 
     public void setMode(String mode) {
@@ -258,7 +279,10 @@ public class Vertex {
     }
 
     public String toString() {
-        return instance + (name.isEmpty()?"":" '"+name+"'") + "\n" + AmrFrame.toString(predictions) + (getPos() !=null?" {"+ getPos() +"}":"") + annotation.toString();
+        return instance + (name.isEmpty() ? "" : " '" + name + "'") + "\n"
+            + AmrFrame.toString(predictions)
+            + (getPos() != null ? " {" + getPos() + "}" : "")
+            + annotation.toString();
     }
 
     public String getPos() {

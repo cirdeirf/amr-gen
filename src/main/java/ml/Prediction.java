@@ -7,11 +7,12 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * This class represents a partial transition function along with an assigned score. For reasons of efficiency, the partial yield of the partial transition function
- * is stored in {@link Prediction#value} and the score without the language model factor is stored in {@link Prediction#lmFreeScore}.
+ * This class represents a partial transition function along with an assigned
+ * score. For reasons of efficiency, the partial yield of the partial transition
+ * function is stored in {@link Prediction#value} and the score without the
+ * language model factor is stored in {@link Prediction#lmFreeScore}.
  */
 public class Prediction {
-
     public PartialTransitionFunction partialTransitionFunction;
     public String value;
 
@@ -50,5 +51,4 @@ public class Prediction {
         this.score = score;
         this.lmFreeScore = lmFreeScore;
     }
-
 }

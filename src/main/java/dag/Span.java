@@ -6,11 +6,11 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * This class represents a span as described in the thesis, which is basically a set of elements.
- * For convenience, the minimum and maximum element of the span are stored explicitly.
+ * This class represents a span as described in the thesis, which is basically a
+ * set of elements. For convenience, the minimum and maximum element of the span
+ * are stored explicitly.
  */
 public class Span {
-
     public int min, max;
     public boolean hasElements = false;
 
@@ -19,17 +19,21 @@ public class Span {
     /**
      * Creates a new span that does not contain any elements.
      */
-    public Span() {min=Integer.MAX_VALUE; max=Integer.MIN_VALUE; elements = new HashSet<>();}
+    public Span() {
+        min = Integer.MAX_VALUE;
+        max = Integer.MIN_VALUE;
+        elements = new HashSet<>();
+    }
 
     /**
      * Adds a new element to the span.
      * @param i the element to be added
      */
     public void add(int i) {
-        if(i < min) {
+        if (i < min) {
             min = i;
         }
-        if(i > max) {
+        if (i > max) {
             max = i;
         }
         hasElements = true;
@@ -41,7 +45,7 @@ public class Span {
      * @param integers the elements to be added
      */
     public void addAll(Set<Integer> integers) {
-        for(int i: integers) {
+        for (int i : integers) {
             add(i);
         }
     }
@@ -50,7 +54,8 @@ public class Span {
      * @return the average of all elements in the span or 0 if the span is empty
      */
     public double avg() {
-        if(elements.isEmpty()) return 0;
+        if (elements.isEmpty())
+            return 0;
         return elements.stream().mapToInt(i -> i).average().getAsDouble();
     }
 
@@ -58,7 +63,8 @@ public class Span {
      * @return the median of all elements in the span or 0 if the span is empty
      */
     public double median() {
-        if(elements.isEmpty()) return 0;
+        if (elements.isEmpty())
+            return 0;
         return StaticHelper.median(elements);
     }
 

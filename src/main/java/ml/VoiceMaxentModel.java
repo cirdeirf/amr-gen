@@ -11,19 +11,20 @@ import misc.StaticHelper;
 import java.util.*;
 import java.util.stream.Collectors;
 
-
 /**
- * This class implements a maximum entropy model for voices. See {@link StanfordMaxentModelImplementation} for further details on the
- * implemented methods. The features used by {@link VoiceMaxentModel#toDatumList(Amr, Vertex, boolean)} are explained in the thesis.
+ * This class implements a maximum entropy model for voices. See {@link
+ * StanfordMaxentModelImplementation} for further details on the implemented
+ * methods. The features used by {@link VoiceMaxentModel#toDatumList(Amr,
+ * Vertex, boolean)} are explained in the thesis.
  */
 public class VoiceMaxentModel extends StanfordMaxentModelImplementation {
-
     @Override
-    public List<Datum<String, String>> toDatumList(Amr amr, Vertex vertex, boolean forTesting) {
+    public List<Datum<String, String>> toDatumList(
+        Amr amr, Vertex vertex, boolean forTesting) {
+        if (!vertex.isPropbankEntry() || vertex.isLink() || vertex.isDeleted())
+            return Collections.emptyList();
 
-        if(!vertex.isPropbankEntry() || vertex.isLink() || vertex.isDeleted()) return Collections.emptyList();
-
-        if(!forTesting && !hasVerbRole(amr, vertex)) {
+        if (!forTesting && !hasVerbRole(amr, vertex)) {
             return Collections.emptyList();
         }
 
@@ -42,7 +43,10 @@ public class VoiceMaxentModel extends StanfordMaxentModelImplementation {
             }
         }
 
-        List<String> outStrings = outEdges.stream().map(e -> e.getLabel()).distinct().collect(Collectors.toList());
+        List<String> outStrings = outEdges.stream()
+                                      .map(e -> e.getLabel())
+                                      .distinct()
+                                      .collect(Collectors.toList());
         Collections.sort(outStrings);
 
         ListFeature argFeatures = new ListFeature("argFeatures");
@@ -57,18 +61,18 @@ public class VoiceMaxentModel extends StanfordMaxentModelImplementation {
         }
 
         for (int i = 0; i < 4; i++) {
-
             int finalI = i;
-            Optional<Edge> outE = outEdges.stream().filter(e -> e.getLabel().equals(":ARG"+ finalI)).findFirst();
-            if(outE.isPresent()) {
-                if(outE.get().getTo().isLink()) {
+            Optional<Edge> outE =
+                outEdges.stream()
+                    .filter(e -> e.getLabel().equals(":ARG" + finalI))
+                    .findFirst();
+            if (outE.isPresent()) {
+                if (outE.get().getTo().isLink()) {
                     argLinkFeatures.add(i + "link");
-                }
-                else {
+                } else {
                     argLinkFeatures.add(i + "pr");
                 }
-            }
-            else {
+            } else {
                 argLinkFeatures.add(i + "no");
             }
         }
@@ -85,17 +89,23 @@ public class VoiceMaxentModel extends StanfordMaxentModelImplementation {
 
         int distanceToRoot = 0;
         while (!currentVertex.getIncomingEdges().isEmpty()) {
-
             if (distanceToRoot > 0) {
-                parentInLabels.add(currentVertex.getIncomingEdges().isEmpty() ? ":ROOT" : currentVertex.getIncomingEdges().get(0).getLabel());
-                parentPropEntries.add(currentVertex.isPropbankEntry() + "_d:" + distanceToRoot);
-                parentPosTags.add(currentVertex.isPropbankEntry() ? ":PROP" : currentVertex.getPos());
+                parentInLabels.add(currentVertex.getIncomingEdges().isEmpty()
+                        ? ":ROOT"
+                        : currentVertex.getIncomingEdges().get(0).getLabel());
+                parentPropEntries.add(
+                    currentVertex.isPropbankEntry() + "_d:" + distanceToRoot);
+                parentPosTags.add(currentVertex.isPropbankEntry()
+                        ? ":PROP"
+                        : currentVertex.getPos());
             }
 
             if (currentVertex == vertex) {
-                parentVertex = currentVertex.getIncomingEdges().get(0).getFrom();
+                parentVertex =
+                    currentVertex.getIncomingEdges().get(0).getFrom();
             } else if (currentVertex == parentVertex) {
-                grandparentVertex = currentVertex.getIncomingEdges().get(0).getFrom();
+                grandparentVertex =
+                    currentVertex.getIncomingEdges().get(0).getFrom();
             }
 
             distanceToRoot++;
@@ -114,13 +124,16 @@ public class VoiceMaxentModel extends StanfordMaxentModelImplementation {
 
         if (parentVertex != null) {
             parentInstance = StaticHelper.getInstanceOrNumeric(parentVertex);
-            parentPos = parentVertex.isPropbankEntry() ? ":PROP" : parentVertex.getPos();
+            parentPos = parentVertex.isPropbankEntry() ? ":PROP"
+                                                       : parentVertex.getPos();
             inLabel = vertex.getIncomingEdges().get(0).getLabel();
         }
 
         if (grandparentVertex != null) {
             grandparentInstance = grandparentVertex.getInstance();
-            grandparentPos = grandparentVertex.isPropbankEntry() ? ":PROP" : grandparentVertex.getPos();
+            grandparentPos = grandparentVertex.isPropbankEntry()
+                ? ":PROP"
+                : grandparentVertex.getPos();
             parentInLabel = parentVertex.getIncomingEdges().get(0).getLabel();
         }
 
@@ -133,7 +146,9 @@ public class VoiceMaxentModel extends StanfordMaxentModelImplementation {
             }
         }
 
-        String lemma = vertex.isPropbankEntry()?instance.substring(0, instance.lastIndexOf('-')):instance;
+        String lemma = vertex.isPropbankEntry()
+            ? instance.substring(0, instance.lastIndexOf('-'))
+            : instance;
 
         List<String> neighbourLabels = new ArrayList<>();
         List<String> neighbourInstances = new ArrayList<>();
@@ -141,11 +156,17 @@ public class VoiceMaxentModel extends StanfordMaxentModelImplementation {
         List<String> neighbourLabelPosTags = new ArrayList<>();
         if (parentVertex != null) {
             for (Edge e : parentVertex.getOutgoingEdges()) {
-                if (!e.isInstanceEdge() && e != vertex.getIncomingEdges().get(0)) {
+                if (!e.isInstanceEdge()
+                    && e != vertex.getIncomingEdges().get(0)) {
                     neighbourLabels.add(e.getLabel());
-                    neighbourInstances.add(StaticHelper.getInstanceOrNumeric(e.getTo()));
-                    neighbourPosTags.add(e.getTo().isPropbankEntry() ? ":PROP" : e.getTo().getPos());
-                    neighbourLabelPosTags.add(e.getLabel() + "," + (e.getTo().isPropbankEntry() ? ":PROP" : e.getTo().getPos()));
+                    neighbourInstances.add(
+                        StaticHelper.getInstanceOrNumeric(e.getTo()));
+                    neighbourPosTags.add(e.getTo().isPropbankEntry()
+                            ? ":PROP"
+                            : e.getTo().getPos());
+                    neighbourLabelPosTags.add(e.getLabel() + ","
+                        + (e.getTo().isPropbankEntry() ? ":PROP"
+                                                       : e.getTo().getPos()));
                 }
             }
         }
@@ -153,7 +174,8 @@ public class VoiceMaxentModel extends StanfordMaxentModelImplementation {
         List<String> outLabelPosTag = new ArrayList<>();
 
         for (Edge e : outEdges) {
-            outLabelPosTag.add(e.getLabel() + "-" + (e.getTo().isPropbankEntry() ? ":PROP" : e.getTo().getPos()));
+            outLabelPosTag.add(e.getLabel() + "-"
+                + (e.getTo().isPropbankEntry() ? ":PROP" : e.getTo().getPos()));
         }
 
         List<String> allParentConcepts = new ArrayList<>();
@@ -163,14 +185,17 @@ public class VoiceMaxentModel extends StanfordMaxentModelImplementation {
         allInLabels.add(inLabel);
         allPosInLabels.add(inLabel + "," + parentPos);
 
-        if(parentVertex != null) {
+        if (parentVertex != null) {
             for (Vertex v : amr.dag) {
                 if (v.isLink() && v.annotation.original == vertex) {
-                    if(!v.getIncomingEdges().isEmpty()) {
-                        Vertex newParent = v.getIncomingEdges().get(0).getFrom();
+                    if (!v.getIncomingEdges().isEmpty()) {
+                        Vertex newParent =
+                            v.getIncomingEdges().get(0).getFrom();
                         allParentConcepts.add(newParent.getInstance());
                         allInLabels.add(v.getIncomingEdges().get(0).getLabel());
-                        allPosInLabels.add(v.getIncomingEdges().get(0).getLabel() + "," + newParent.getInstance());
+                        allPosInLabels.add(
+                            v.getIncomingEdges().get(0).getLabel() + ","
+                            + newParent.getInstance());
                     }
                 }
             }
@@ -181,24 +206,30 @@ public class VoiceMaxentModel extends StanfordMaxentModelImplementation {
 
         List<IndicatorFeature> features = new ArrayList<>();
 
-        for(int i=0; i < 3; i++) {
-            features.add(new StringFeature("arg"+i+"present", outEdges.contains(":ARG"+i)+"arg"+i));
+        for (int i = 0; i < 3; i++) {
+            features.add(new StringFeature("arg" + i + "present",
+                outEdges.contains(":ARG" + i) + "arg" + i));
         }
 
-        features.add(new StringFeature("allOutLabels", String.join(",", outStrings)));
-        features.add(new StringFeature("allArgFeatures", String.join(",", argFeatures.featureStrings)));
+        features.add(
+            new StringFeature("allOutLabels", String.join(",", outStrings)));
+        features.add(new StringFeature(
+            "allArgFeatures", String.join(",", argFeatures.featureStrings)));
 
         features.add(new StringFeature("instance", instance));
         features.add(new StringFeature("inLabel", inLabel));
-        features.add(new StringFeature("distanceToRoot", Math.min(3, distanceToRoot)));
-        features.add(new StringFeature("restrictedOutSize", Math.min(3, outStrings.size())));
-        features.add(new StringFeature("depth", Math.min(3,vertex.subtreeSize())));
-        features.add(new StringFeature("outEmpty",outStrings.isEmpty()+""));
+        features.add(
+            new StringFeature("distanceToRoot", Math.min(3, distanceToRoot)));
+        features.add(new StringFeature(
+            "restrictedOutSize", Math.min(3, outStrings.size())));
+        features.add(
+            new StringFeature("depth", Math.min(3, vertex.subtreeSize())));
+        features.add(new StringFeature("outEmpty", outStrings.isEmpty() + ""));
         features.add(new StringFeature("parentInstance", parentInstance));
         features.add(new StringFeature("parentPos", parentPos));
 
         ListFeature f1 = new ListFeature("outLabel");
-        for(String outLabel: outStrings) {
+        for (String outLabel : outStrings) {
             f1.add(outLabel);
         }
         features.add(f1);
@@ -206,35 +237,73 @@ public class VoiceMaxentModel extends StanfordMaxentModelImplementation {
 
         features.add(new StringFeature("instance", instance));
 
-        features.add(new StringFeature("lemma", lemma + (parentVertex==null?":ROOT":parentVertex.mode)));
-        features.add(new StringFeature("instance-outEmpty", instance + outEdges.isEmpty()));
+        features.add(new StringFeature("lemma",
+            lemma + (parentVertex == null ? ":ROOT" : parentVertex.mode)));
+        features.add(new StringFeature(
+            "instance-outEmpty", instance + outEdges.isEmpty()));
 
-        features.add(argLinkFeatures.composeWith(new StringFeature("lemma", lemma), "*c3"));
+        features.add(argLinkFeatures.composeWith(
+            new StringFeature("lemma", lemma), "*c3"));
 
         features.add(new StringFeature("parentInst", parentInstance));
-        features.add(new StringFeature("parentInst-inLabel", parentInstance + inLabel));
+        features.add(
+            new StringFeature("parentInst-inLabel", parentInstance + inLabel));
         features.add(new StringFeature("inLabel", inLabel));
         features.add(new StringFeature("outSize", outEdges.size()));
         features.add(new StringFeature("depth", vertex.subtreeSize()));
-        features.add(new StringFeature("numberOfArgs", outEdges.stream().filter(e -> e.getLabel().matches(":ARG[0-9]")).count() + ""));
-        features.add(new StringFeature("distToRoot-outSize", distanceToRoot + outEdges.size()));
-        features.add(new ListFeature("allPosInLabels-depth", allPosInLabels).composeWith(new StringFeature("depth", vertex.subtreeSize()), "*c0"));
-        features.add(new ListFeature("allInLabels-outSize", allInLabels).composeWith(new StringFeature("outSize", outEdges.size()), "*c1"));
-        features.add(new ListFeature("outLabelPosTag", outLabelPosTag).composeWith(new StringFeature("inLabel", inLabel), "*c2"));
+        features.add(new StringFeature("numberOfArgs",
+            outEdges.stream()
+                    .filter(e -> e.getLabel().matches(":ARG[0-9]"))
+                    .count()
+                + ""));
+        features.add(new StringFeature(
+            "distToRoot-outSize", distanceToRoot + outEdges.size()));
+        features.add(
+            new ListFeature("allPosInLabels-depth", allPosInLabels)
+                .composeWith(
+                    new StringFeature("depth", vertex.subtreeSize()), "*c0"));
+        features.add(
+            new ListFeature("allInLabels-outSize", allInLabels)
+                .composeWith(
+                    new StringFeature("outSize", outEdges.size()), "*c1"));
+        features.add(
+            new ListFeature("outLabelPosTag", outLabelPosTag)
+                .composeWith(new StringFeature("inLabel", inLabel), "*c2"));
 
-        features.add(new ListFeature("allParentInsts", allParentConcepts).composeWith(new StringFeature("hasNoArgChildren",  outStrings.stream().anyMatch(s -> !s.startsWith(":ARG"))), "*c4"));
+        features.add(new ListFeature("allParentInsts", allParentConcepts)
+                         .composeWith(new StringFeature("hasNoArgChildren",
+                                          outStrings.stream().anyMatch(
+                                              s -> !s.startsWith(":ARG"))),
+                             "*c4"));
 
         features.add(new StringFeature("instance-inLabel", instance + inLabel));
-        features.add(new StringFeature("instance-outSize", instance + outEdges.size()));
-        features.add(new StringFeature("instance-mode", instance + vertex.mode));
-        features.add(new StringFeature("instance-depth", instance + vertex.subtreeSize()));
-        features.add(new StringFeature("inLabel-outSize", inLabel + outEdges.size()));
-        features.add(new StringFeature("inLabel-numberOfArgs", inLabel + + outEdges.stream().filter(e -> e.getLabel().matches(":ARG[0-9]")).count()));
-        features.add(new StringFeature("inLabel-depth", inLabel + vertex.subtreeSize()));
-        features.add(new StringFeature("parentInst-grandparentInst", parentInstance + grandparentInstance));
-        features.add(new ListFeature("outLabels", outStrings).composeWith(new StringFeature("inLabel", inLabel), "*c1"));
-        features.add(new StringFeature("parentInst-numberOfArgs", parentInstance +  outEdges.stream().filter(e -> e.getLabel().matches(":ARG[0-9]")).count()));
-        features.add(new StringFeature("parentPos-hasInvArgFeature", parentPos + (hasInverseLabel && hasArgLabel)));
+        features.add(
+            new StringFeature("instance-outSize", instance + outEdges.size()));
+        features.add(
+            new StringFeature("instance-mode", instance + vertex.mode));
+        features.add(new StringFeature(
+            "instance-depth", instance + vertex.subtreeSize()));
+        features.add(
+            new StringFeature("inLabel-outSize", inLabel + outEdges.size()));
+        features.add(new StringFeature("inLabel-numberOfArgs",
+            inLabel
+                + +outEdges.stream()
+                       .filter(e -> e.getLabel().matches(":ARG[0-9]"))
+                       .count()));
+        features.add(
+            new StringFeature("inLabel-depth", inLabel + vertex.subtreeSize()));
+        features.add(new StringFeature("parentInst-grandparentInst",
+            parentInstance + grandparentInstance));
+        features.add(
+            new ListFeature("outLabels", outStrings)
+                .composeWith(new StringFeature("inLabel", inLabel), "*c1"));
+        features.add(new StringFeature("parentInst-numberOfArgs",
+            parentInstance
+                + outEdges.stream()
+                      .filter(e -> e.getLabel().matches(":ARG[0-9]"))
+                      .count()));
+        features.add(new StringFeature("parentPos-hasInvArgFeature",
+            parentPos + (hasInverseLabel && hasArgLabel)));
 
         features.add(new ListFeature("outLabels", outStrings));
         features.add(new StringFeature("instance", instance));
@@ -245,13 +314,24 @@ public class VoiceMaxentModel extends StanfordMaxentModelImplementation {
         features.add(new ListFeature("neighbourInstances", neighbourInstances));
         features.add(new ListFeature("neighbourPosTags", neighbourPosTags));
         features.add(new ListFeature("neighbourLabels", neighbourLabels));
-        features.add(new ListFeature("neighbourLabelPosTags", neighbourLabelPosTags));
+        features.add(
+            new ListFeature("neighbourLabelPosTags", neighbourLabelPosTags));
 
-        features.add(new ListFeature("children", outEdges.stream().filter(e -> !e.isInstanceEdge()).map(e -> StaticHelper.getInstanceOrNumeric(e.getTo())).collect(Collectors.toList())));
-        features.add(new ListFeature("nonLinkChildren", outEdges.stream().filter(e -> !e.isInstanceEdge() && !e.getTo().isLink()).map(e -> StaticHelper.getInstanceOrNumeric(e.getTo())).collect(Collectors.toList())));
+        features.add(new ListFeature("children",
+            outEdges.stream()
+                .filter(e -> !e.isInstanceEdge())
+                .map(e -> StaticHelper.getInstanceOrNumeric(e.getTo()))
+                .collect(Collectors.toList())));
+        features.add(new ListFeature("nonLinkChildren",
+            outEdges.stream()
+                .filter(e -> !e.isInstanceEdge() && !e.getTo().isLink())
+                .map(e -> StaticHelper.getInstanceOrNumeric(e.getTo()))
+                .collect(Collectors.toList())));
 
-        features.add(new StringFeature("neighbourSize", neighbourLabels.size()));
-        features.add(new StringFeature("noNeighbours", neighbourLabels.isEmpty()));
+        features.add(
+            new StringFeature("neighbourSize", neighbourLabels.size()));
+        features.add(
+            new StringFeature("noNeighbours", neighbourLabels.isEmpty()));
 
         features.add(new StringFeature("parentPos", parentPos));
         features.add(new ListFeature("allParentInsts", allParentConcepts));
@@ -273,22 +353,36 @@ public class VoiceMaxentModel extends StanfordMaxentModelImplementation {
         features.add(new StringFeature("outEmpty", outEdges.isEmpty()));
 
         features.add(new ListFeature("outLabelPosTag", outLabelPosTag));
-        features.add(new ListFeature("childrenWithLabels", outEdges.stream().map(e -> e.getLabel() + StaticHelper.getInstanceOrNumeric(e.getTo())).collect(Collectors.toList())));
+        features.add(new ListFeature("childrenWithLabels",
+            outEdges.stream()
+                .map(e
+                    -> e.getLabel()
+                        + StaticHelper.getInstanceOrNumeric(e.getTo()))
+                .collect(Collectors.toList())));
 
         features.add(argFeatures);
         features.add(argLinkFeatures);
 
-        features.add(new StringFeature("numberOfArgs", outEdges.stream().filter(e -> e.getLabel().matches(":ARG[0-9]")).count() + ""));
+        features.add(new StringFeature("numberOfArgs",
+            outEdges.stream()
+                    .filter(e -> e.getLabel().matches(":ARG[0-9]"))
+                    .count()
+                + ""));
         features.add(new StringFeature("mode", vertex.mode));
-        features.add(new StringFeature("parentMode", parentVertex==null?":ROOT":parentVertex.mode));
+        features.add(new StringFeature(
+            "parentMode", parentVertex == null ? ":ROOT" : parentVertex.mode));
 
         features.add(new StringFeature("depth", vertex.subtreeSize()));
 
         features.add(new StringFeature("hasInverseLabel", hasInverseLabel));
-        features.add(new StringFeature("hasInvArgFeature", (hasInverseLabel && hasArgLabel)));
+        features.add(new StringFeature(
+            "hasInvArgFeature", (hasInverseLabel && hasArgLabel)));
 
-        features.add(new StringFeature("hasArgChildren", outStrings.stream().anyMatch(s -> s.startsWith(":ARG") && !s.endsWith("-of"))));
-        features.add(new StringFeature("hasNoArgChildren", outStrings.stream().anyMatch(s -> !s.startsWith(":ARG"))));
+        features.add(new StringFeature("hasArgChildren",
+            outStrings.stream().anyMatch(
+                s -> s.startsWith(":ARG") && !s.endsWith("-of"))));
+        features.add(new StringFeature("hasNoArgChildren",
+            outStrings.stream().anyMatch(s -> !s.startsWith(":ARG"))));
 
         featureManager.addAllUnaries(features);
 
@@ -298,11 +392,14 @@ public class VoiceMaxentModel extends StanfordMaxentModelImplementation {
 
     // helper function to check whether a vertex acutally represens a verb
     private boolean hasVerbRole(Amr amr, Vertex vertex) {
-        if(vertex.isPropbankEntry() && vertex.getInstanceEdge() != null) {
+        if (vertex.isPropbankEntry() && vertex.getInstanceEdge() != null) {
             String mappedPos = PosHelper.mapPos(vertex.getPos(), false);
-            if (mappedPos.equals("VB")) return true;
-            else if (mappedPos.equals("VBN") || mappedPos.equals("VBG") || mappedPos.equals("JJ") || mappedPos.equals("NN")) {
-                EdgeTypePair eat = new EdgeTypePair(vertex.getInstanceEdge(), AlignmentType.BE);
+            if (mappedPos.equals("VB"))
+                return true;
+            else if (mappedPos.equals("VBN") || mappedPos.equals("VBG")
+                || mappedPos.equals("JJ") || mappedPos.equals("NN")) {
+                EdgeTypePair eat = new EdgeTypePair(
+                    vertex.getInstanceEdge(), AlignmentType.BE);
                 if (amr.typeAlignment.containsKey(eat)) {
                     return true;
                 }
@@ -312,8 +409,8 @@ public class VoiceMaxentModel extends StanfordMaxentModelImplementation {
     }
 
     @Override
-    public void applyModification(Amr amr, Vertex vertex, List<Prediction> predictions) {
+    public void applyModification(
+        Amr amr, Vertex vertex, List<Prediction> predictions) {
         vertex.predictions.put("voice", predictions);
     }
-
 }

@@ -7,15 +7,14 @@ import java.util.List;
  * This class represents a feature that consists of a single String value.
  */
 class StringFeature extends IndicatorFeature {
-
     public String featureString;
 
     public StringFeature(String name, int val) {
-        this(name, val+"");
+        this(name, val + "");
     }
 
     public StringFeature(String name, boolean val) {
-        this(name, val+"");
+        this(name, val + "");
     }
 
     public StringFeature(String featureString) {
@@ -27,7 +26,7 @@ class StringFeature extends IndicatorFeature {
     }
 
     public List<String> toContext() {
-        return Collections.singletonList(featureString +"_f"+ getId());
+        return Collections.singletonList(featureString + "_f" + getId());
     }
 
     @Override

@@ -23,10 +23,10 @@ import java.nio.file.Paths;
 import java.util.*;
 
 /**
- * An implementation of a maximum entropy model based on the {@link GISModel} class from OpenNLP.
+ * An implementation of a maximum entropy model based on the {@link GISModel}
+ * class from OpenNLP.
  */
 public abstract class OpenNlpMaxentModelImplementation {
-
     /**
      * The autoload params used by this model, see {@link AutoLoadParams}
      */
@@ -48,31 +48,34 @@ public abstract class OpenNlpMaxentModelImplementation {
     }
 
     /**
-     * Extracts from a vertex of an AMR graph a list of feature vectors with outcomes, represented by the {@link Event} class.
+     * Extracts from a vertex of an AMR graph a list of feature vectors with
+     * outcomes, represented by the {@link Event} class.
      * @param amr the AMR graph
      * @param vertex the vertex
-     * @param forTesting if the feature vector and the outcome should be the gold feature vector and the gold outcome, set this to false.
-     *                   Otherwise, if the feature vector should be computed for testing, set this to true.
+     * @param forTesting if the feature vector and the outcome should be the
+     * gold feature vector and the gold outcome, set this to false. Otherwise,
+     * if the feature vector should be computed for testing, set this to true.
      * @return the list of events
      */
-    public abstract List<Event> toEvents(Amr amr, Vertex vertex, boolean forTesting);
+    public abstract List<Event> toEvents(
+        Amr amr, Vertex vertex, boolean forTesting);
 
     /**
-     * Automatically loads this maximum entropy model using the parameters specified by an instance of {@link AutoLoadParams}
+     * Automatically loads this maximum entropy model using the parameters
+     * specified by an instance of {@link AutoLoadParams}
      * @param params the parameters to use for loading the model
      * @param filename the file name under which the model can be found
      * @param train whether the model should be (re)trained or left as is
      */
-    public void autoLoad(AutoLoadParams params, String filename, boolean train) throws IOException {
-
+    public void autoLoad(AutoLoadParams params, String filename, boolean train)
+        throws IOException {
         this.params = params.makeCopy();
         loadMetaInformations(filename);
 
-        if(train) {
-
-             for(Integer nrOfIterations: params.iterNrs) {
-
-                Debugger.println("starting iteration with iterNr " + nrOfIterations);
+        if (train) {
+            for (Integer nrOfIterations : params.iterNrs) {
+                Debugger.println(
+                    "starting iteration with iterNr " + nrOfIterations);
 
                 List<Event> events = deriveEvents(params.trainingData);
 
@@ -83,11 +86,11 @@ public abstract class OpenNlpMaxentModelImplementation {
                     bestScore = trainScore;
                     saveModelToFile(filename);
                     saveMetaInformations(filename, nrOfIterations, bestScore);
-                    Debugger.println("[NEW] saving new best result: score = " + bestScore + ", nrOfIterations = " + nrOfIterations);
+                    Debugger.println("[NEW] saving new best result: score = "
+                        + bestScore + ", nrOfIterations = " + nrOfIterations);
                 }
             }
-        }
-        else {
+        } else {
             loadModelFromFile(filename);
         }
     }
@@ -98,39 +101,42 @@ public abstract class OpenNlpMaxentModelImplementation {
      * @param iterations the number of iterations
      * @param debug if set to true, additional debugging information is printed
      */
-    private void train(List<Event> events, int iterations, boolean debug) throws IOException {
-
+    private void train(List<Event> events, int iterations, boolean debug)
+        throws IOException {
         PrintStream original = null;
 
-        if(!debug) {
+        if (!debug) {
             original = System.out;
-            System.setOut(new PrintStream(new OutputStream() {public void write(int b) { }}));
+            System.setOut(new PrintStream(new OutputStream() {
+                public void write(int b) {}
+            }));
         }
 
-        if(events.isEmpty()) {
-            throw new AssertionError("cannot train maximum entropy model because the list of events is empty");
+        if (events.isEmpty()) {
+            throw new AssertionError(
+                "cannot train maximum entropy model because the list of events is empty");
         }
 
         ObjectStream<Event> reorderEventStream = new ReorderEventStream(events);
         DataIndexer dataIndexer = new OnePassDataIndexer(reorderEventStream);
         model = GIS.trainModel(iterations, dataIndexer, debug, false, null, 0);
 
-        if(!debug) {
+        if (!debug) {
             System.setOut(original);
         }
     }
 
     /**
-     * Derives a list of events from a list of AMR graphs using {@link OpenNlpMaxentModelImplementation#toEvents(Amr, Vertex, boolean)}.
+     * Derives a list of events from a list of AMR graphs using {@link
+     * OpenNlpMaxentModelImplementation#toEvents(Amr, Vertex, boolean)}.
      * @param amrs the list of AMR graphs
      * @return the list of events
      */
     private List<Event> deriveEvents(List<Amr> amrs) {
-
         List<Event> events = new ArrayList<>();
 
-        for(Amr amr: amrs) {
-            for(Vertex vertex: amr.dag) {
+        for (Amr amr : amrs) {
+            for (Vertex vertex : amr.dag) {
                 events.addAll(toEvents(amr, vertex, false));
             }
         }
@@ -138,37 +144,42 @@ public abstract class OpenNlpMaxentModelImplementation {
     }
 
     /**
-     * Returns the n-best predictions (where n is determined by {@link AutoLoadParams#takeBestN}) given a feature vector.
+     * Returns the n-best predictions (where n is determined by {@link
+     * AutoLoadParams#takeBestN}) given a feature vector.
      * @param context the feature vector, represented by a String array
      * @return the list of predictions
      */
     public List<Prediction> getNBestSorted(String[] context) {
-        return getNBestSorted(context, params.takeBestN, params.maxProbDecrement);
+        return getNBestSorted(
+            context, params.takeBestN, params.maxProbDecrement);
     }
 
     /**
-     * Returns the n-best predictions such that the score of no prediction is below the maximum score minus {@code maxProbDifference}, given a feature vector.
+     * Returns the n-best predictions such that the score of no prediction is
+     * below the maximum score minus {@code maxProbDifference}, given a feature
+     * vector.
      * @param context the feature vector, represented by a String array
      * @param n the maximum number of predictions
-     * @param maxProbDifference the threshold, the score of no returned prediction is below the maximum score minus this threshold.
+     * @param maxProbDifference the threshold, the score of no returned
+     * prediction is below the maximum score minus this threshold.
      * @return the list of predictions
      */
-    public List<Prediction> getNBestSorted(String[] context, int n, double maxProbDifference) {
-
+    public List<Prediction> getNBestSorted(
+        String[] context, int n, double maxProbDifference) {
         List<Prediction> predictions;
         double[] scores = model.eval(context);
 
         predictions = new ArrayList<>();
         double bestScore = -1;
-        while(n >= 1) {
+        while (n >= 1) {
             String prediction = model.getBestOutcome(scores);
             double score = scores[model.getIndex(prediction)];
 
-            if(predictions.isEmpty()) {
+            if (predictions.isEmpty()) {
                 bestScore = score;
             }
 
-            if(score >= bestScore - maxProbDifference) {
+            if (score >= bestScore - maxProbDifference) {
                 predictions.add(new Prediction(prediction, score));
             }
 
@@ -180,35 +191,37 @@ public abstract class OpenNlpMaxentModelImplementation {
     }
 
     private LossEvaluator test(List<Amr> amrs) {
-
         LossEvaluator lossEvaluator = new LossEvaluator();
 
         double wrongCount = 0, totalCount = 0;
 
-        for(Amr amr: amrs) {
-            for(Vertex v: amr.dag) {
-
+        for (Amr amr : amrs) {
+            for (Vertex v : amr.dag) {
                 List<Event> events = toEvents(amr, v, false);
 
-                for(Event event: events) {
+                for (Event event : events) {
+                    List<Prediction> predictions =
+                        getNBestSorted(event.getContext(), params.takeBestN,
+                            params.maxProbDecrement);
 
-                    List<Prediction> predictions = getNBestSorted(event.getContext(), params.takeBestN, params.maxProbDecrement);
-
-                    if(!predictions.get(0).getValue().equals(event.getOutcome())) {
+                    if (!predictions.get(0).getValue().equals(
+                            event.getOutcome())) {
                         wrongCount++;
                     }
                     totalCount++;
                 }
             }
         }
-        lossEvaluator.total = 1 - wrongCount/totalCount;
+        lossEvaluator.total = 1 - wrongCount / totalCount;
         return lossEvaluator;
     }
 
     private void saveModelToFile(String filename) throws IOException {
-        if(model == null) throw new AssertionError("model is null, cannot be saved");
+        if (model == null)
+            throw new AssertionError("model is null, cannot be saved");
         File outputFile = new File(filename);
-        GISModelWriter writer = new SuffixSensitiveGISModelWriter(model, outputFile);
+        GISModelWriter writer =
+            new SuffixSensitiveGISModelWriter(model, outputFile);
         writer.persist();
     }
 
@@ -218,25 +231,25 @@ public abstract class OpenNlpMaxentModelImplementation {
         model = (GISModel) reader.getModel();
     }
 
-    private void saveMetaInformations(String filename, int nrOfIterations, double bestResult) throws IOException {
+    private void saveMetaInformations(String filename, int nrOfIterations,
+        double bestResult) throws IOException {
         List<String> metaInfo = new ArrayList<>();
-        metaInfo.add(nrOfIterations+"");
-        metaInfo.add(bestResult+"");
-        Files.write(Paths.get(filename+".meta"), metaInfo);
+        metaInfo.add(nrOfIterations + "");
+        metaInfo.add(bestResult + "");
+        Files.write(Paths.get(filename + ".meta"), metaInfo);
     }
 
     private void loadMetaInformations(String filename) throws IOException {
-        if(new File(filename + ".meta").isFile()) {
-            List<String> metaInfo = Files.readAllLines(Paths.get(filename + ".meta"));
+        if (new File(filename + ".meta").isFile()) {
+            List<String> metaInfo =
+                Files.readAllLines(Paths.get(filename + ".meta"));
             bestScore = Double.valueOf(metaInfo.get(1));
-        }
-        else {
+        } else {
             bestScore = 0;
         }
     }
 
     private static class ReorderEventStream implements ObjectStream<Event> {
-
         private List<Event> events;
         int currentIndex;
 
@@ -247,7 +260,7 @@ public abstract class OpenNlpMaxentModelImplementation {
 
         @Override
         public Event read() throws IOException {
-            if(currentIndex < events.size()) {
+            if (currentIndex < events.size()) {
                 Event ret = events.get(currentIndex);
                 currentIndex++;
                 return ret;
@@ -257,7 +270,7 @@ public abstract class OpenNlpMaxentModelImplementation {
 
         @Override
         public void reset() throws IOException, UnsupportedOperationException {
-            currentIndex=0;
+            currentIndex = 0;
         }
 
         @Override

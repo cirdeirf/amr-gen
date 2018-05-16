@@ -4,14 +4,14 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Simple wrapper class for a {@link DirectedGraph} to represent a dependency tree.
+ * Simple wrapper class for a {@link DirectedGraph} to represent a dependency
+ * tree.
  */
 public class DependencyTree {
-
     // the sentence corresponding to the dependency tree
     String[] sentence;
     // the alignment of vertices to indices in the sentence
-    Map<Vertex,Integer> alignment;
+    Map<Vertex, Integer> alignment;
     // the actual tree
     DirectedGraph tree;
     // the corresponding AMR graph

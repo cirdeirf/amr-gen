@@ -4,7 +4,6 @@ package dag;
  * Represents an edge of a directed acyclic graph.
  */
 public class Edge {
-
     Vertex from, to;
     String label;
 
@@ -20,7 +19,7 @@ public class Edge {
      * @param label the label of the edge
      */
     public Edge(Vertex from, Vertex to, String label) {
-        this(from,to,label,true);
+        this(from, to, label, true);
     }
 
     /**
@@ -28,11 +27,12 @@ public class Edge {
      * @param from the node from which the edge starts
      * @param to the node at which the edge ends
      * @param label the label of the edge
-     * @param addToOutgoing whether the edge should be added to the list of outgoing edges of {@code from}
+     * @param addToOutgoing whether the edge should be added to the list of
+     * outgoing edges of {@code from}
      */
     public Edge(Vertex from, Vertex to, String label, boolean addToOutgoing) {
         this.from = from;
-        if(addToOutgoing) {
+        if (addToOutgoing) {
             from.addOutgoingEdge(this);
         }
         this.to = to;
@@ -41,9 +41,9 @@ public class Edge {
     }
 
     /**
-     * This function uncouples the edge from its to-node, creates a link to the latter and
-     * reattaches the edge to the newly created link. It is required to implement the
-     * DELETE-REENTRANCE transition as described in the thesis.
+     * This function uncouples the edge from its to-node, creates a link to the
+     * latter and reattaches the edge to the newly created link. It is required
+     * to implement the DELETE-REENTRANCE transition as described in the thesis.
      */
     public void uncouple() {
         Vertex old = to;

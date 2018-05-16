@@ -4,7 +4,6 @@ package dag;
  * This class represents an annotation function for a single {@link Vertex}.
  */
 public class AnnotationFunction {
-
     public Vertex original;
     public boolean delete;
 
@@ -22,7 +21,7 @@ public class AnnotationFunction {
     }
 
     public String toString() {
-        return pos + " " + (original!=null?"L ":"") + (delete?"D ":"");
+        return pos + " " + (original != null ? "L " : "")
+            + (delete ? "D " : "");
     }
-
 }

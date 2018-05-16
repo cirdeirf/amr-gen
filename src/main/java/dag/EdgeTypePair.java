@@ -1,11 +1,12 @@
 package dag;
 
 /**
- * This class represents a pair consisting of an edge and an alignment type. It is used as a key for the alignment map built by the {@link BigraphAlignmentBuilder} where
- * pairs of (edge, alignmentType) are mapped to words of the corresponding sentence.
+ * This class represents a pair consisting of an edge and an alignment type. It
+ * is used as a key for the alignment map built by the {@link
+ * BigraphAlignmentBuilder} where pairs of (edge, alignmentType) are mapped to
+ * words of the corresponding sentence.
  */
 public class EdgeTypePair {
-
     Edge e;
     AlignmentType type;
 
@@ -21,7 +22,7 @@ public class EdgeTypePair {
 
     @Override
     public boolean equals(Object o) {
-        if(o instanceof EdgeTypePair) {
+        if (o instanceof EdgeTypePair) {
             EdgeTypePair eat = (EdgeTypePair) o;
             return e.equals(eat.e) && type.equals(eat.type);
         }
