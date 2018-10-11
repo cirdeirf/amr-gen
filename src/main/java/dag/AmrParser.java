@@ -92,8 +92,8 @@ public class AmrParser {
      * Reads a list of AMR graphs from a file.
      * @param file the file in which the AMR graphs are stored in LDC2014T12
      * format. To also load the reference sentences, each AMR graph must be
-     *             annotated with a # ::tok line containing a tokenized version
-     * of the reference sentence.
+     * annotated with a # ::tok line containing a tokenized version of the
+     * reference sentence.
      * @param dependencyTreeFile the file in which the corresponding dependency
      * trees are stored, see {@link AmrParser#addDependencyTrees(List, String)}
      * @param posTagFile the file in which the corresponding POS tags are

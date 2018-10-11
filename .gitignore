@@ -1,8 +1,5 @@
-.classpath
-.project
-.settings/
+corpus/
 target/
-
 models/arg_insertion.model
 models/arg_insertion.model.meta
 models/child_ins.bin.gz

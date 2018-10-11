@@ -446,10 +446,9 @@ public class AmrMain {
      * @param amrs the AMR graphs for which realizations should be generated
      * @param firstStage whether first-stage processing (i.e. MERGE, SWAP,
      * DELETE and KEEP transitions) should also be performed; in most cases,
-     *                   this parameter should be set to true but for
-     * hyperparameter optimization, it is more efficient to peform first-stage
-     * processing only once and leave the AMR graphs as is in subsequent calls
-     * to this function.
+     * this parameter should be set to true but for hyperparameter optimization,
+     * it is more efficient to peform first-stage processing only once and leave
+     * the AMR graphs as is in subsequent calls to this function.
      * @param postProcess whether post-processing should be performed
      * @return the list of generated realizations
      */
@@ -684,8 +683,8 @@ public class AmrMain {
      * Loads a list of AMR graphs from a given directory.
      * @param directory the directory from which the AMR graphs are loaded. This
      * directory must not directly contain the AMR graphs, but instead contain
-     *                  subdirectories as specified by {@link
-     * PathList#AMR_SUBDIRECTORIES} in which the actual AMR graphs are stored.
+     * subdirectories as specified by {@link PathList#AMR_SUBDIRECTORIES} in
+     * which the actual AMR graphs are stored.
      * @param forTesting whether the AMR graphs should be prepared for testing
      * (in which case no gold annotations, POS tagging and alignments are
      * loaded) or for training
@@ -700,8 +699,8 @@ public class AmrMain {
      * Loads a list of AMR graphs from a given directory.
      * @param directory the directory from which the AMR graphs are loaded. This
      * directory must not directly contain the AMR graphs, but instead contain
-     *                  subdirectories as specified by {@link
-     * PathList#AMR_SUBDIRECTORIES} in which the actual AMR graphs are stored.
+     * subdirectories as specified by {@link PathList#AMR_SUBDIRECTORIES} in
+     * which the actual AMR graphs are stored.
      * @param forTesting whether the AMR graphs should be prepared for testing
      * (in which case no gold annotations, POS tagging and alignments are
      * loaded) or for training
