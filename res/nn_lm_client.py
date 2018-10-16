@@ -1,14 +1,26 @@
 #  import warnings
 #  warnings.filterwarnings('ignore')
 
-import mxnet as mx
-from mxnet import gluon, autograd, ndarray
-from mxnet.gluon.utils import download
-
-import gluonnlp as nlp
-
+import socket
 import numpy as np
-import time
+import gluonnlp as nlp
+import mxnet as mx
+
+class NNLanguageModelClient:
+    def __init__(self):
+        self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.s.connect(("localhost", 32000))
+        self.f = self.s.makefile('rw')
+        self.lm = NNLanguageModel('awd_lstm_lm_600', 'wikitext-2')
+        self.listenLoop()
+
+    def listenLoop(self):
+        f = self.f
+        print("connected")
+        while True:
+            line = f.readline()
+            f.write(str(self.lm.score(line)) + '\n')
+            f.flush()
 
 class NNLanguageModel:
     num_gpus = 0
@@ -26,11 +38,11 @@ class NNLanguageModel:
         self.train_dataset, self.test_dataset = [nlp.data.WikiText2(segment=segment, bos=None, eos='<eos>',
                             skip_empty=False) for segment in ['train', 'test']]
         self.vocab = nlp.Vocab(nlp.data.Counter(self.train_dataset[0]),
-                               padding_token=None, bos_token=None)
+                            padding_token=None, bos_token=None)
         self.awd_model_name = awd_model_name
         self.awd_model, self.vocab = nlp.model.get_model(self.awd_model_name,
-                                         dataset_name='wikitext-2',
-                                         pretrained=True)
+                                        dataset_name='wikitext-2',
+                                        pretrained=True)
         print(self.awd_model)
         print(self.vocab)
 
@@ -56,19 +68,12 @@ class NNLanguageModel:
             data = data.as_in_context(self.context[0])
             target = target.as_in_context(self.context[0])
             output, hidden = self.awd_model(data, hidden)
-            lSoftmax = -ndarray.log_softmax(output)
-            lSoftmax = -ndarray.log_softmax(output)
+            lSoftmax = -mx.ndarray.log_softmax(output)
+            lSoftmax = -mx.ndarray.log_softmax(output)
             score += lSoftmax.asnumpy().reshape(-1)[target[0,
                                                            0].asscalar().astype(int)]
             hidden = self.detach(hidden)
-        print(type(score))
         return score
 
-#  lm = NNLanguageModel('awd_lstm_lm_600', 'wikitext-2')
-#  sent = 'I that that this is a disgraceful situation that should not be tolerated'
-#  print(sent)
-#  startTime = time.time()
-#  print(lm.score(sent))
-#  elapsedTime = time.time() - startTime
-#  print('time', elapsedTime)
-#  print()
+if __name__ == '__main__':
+    lm_client = NNLanguageModelClient()
