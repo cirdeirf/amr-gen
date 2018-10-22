@@ -20,6 +20,7 @@ import java.util.stream.Collectors;
  */
 public class PostProcessor {
     private final ArrayEncodedNgramLanguageModel<String> lm;
+    private final NNLanguageModel nnLM;
     private final DenomMaxentModel denomMaxentModel;
 
     // hyperparameters used by the post processor
@@ -36,8 +37,9 @@ public class PostProcessor {
      * denominator probabilities
      */
     public PostProcessor(ArrayEncodedNgramLanguageModel<String> lm,
-        DenomMaxentModel denomMaxentModel) {
+        NNLanguageModel nnLM, DenomMaxentModel denomMaxentModel) {
         this.lm = lm;
+        this.nnLM = nnLM;
         this.denomMaxentModel = denomMaxentModel;
     }
 

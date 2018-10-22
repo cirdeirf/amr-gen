@@ -307,6 +307,8 @@ public class AmrMain {
         ArrayEncodedNgramLanguageModel<String> languageModel =
             (ArrayEncodedNgramLanguageModel) LmReaders.readLmBinary(
                 PathList.LANGUAGE_MODEL_PATH);
+        NNLanguageModel nnLanguageModel =
+            new NNLanguageModel("awd_lstm_lm_600");
 
         // if the maximum entropy models are to be trained, load the training
         // and development data and build type alignments from the corresponding
@@ -368,9 +370,9 @@ public class AmrMain {
                 maxentModels.otherInsertionMaxentModel,
                 maxentModels.childInsertionMaxentModel,
                 maxentModels.denomMaxentModel, defaultRealizer, positionHelper,
-                languageModel);
-        postProcessor =
-            new PostProcessor(languageModel, maxentModels.denomMaxentModel);
+                languageModel, nnLanguageModel);
+        postProcessor = new PostProcessor(
+            languageModel, nnLanguageModel, maxentModels.denomMaxentModel);
 
         // automatically load all maximum entropy models
         maxentModels.posMaxentModel.autoLoad(params, PathList.POS_MAXENT_PATH,
