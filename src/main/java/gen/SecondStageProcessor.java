@@ -29,6 +29,9 @@ public class SecondStageProcessor {
     // efficiency as it reduces the number of times the language model has to be
     // queried
     private static Map<List<String>, Float> nGramScores = new HashMap<>();
+    // TODO stores a number of predictions that are rescored together
+    // private static ArrayList<Prediction> rescorePredictions = new
+    // ArrayList<>();
 
     // the maximum entropy models used by the second stage processor
     private final RealizeMaxentModel realizationMaxentModel;
@@ -153,9 +156,14 @@ public class SecondStageProcessor {
                 PrunedList pl = getBest(amr, e.getTo());
 
                 if (!pl.isEmpty()) {
-                    Prediction bestPrediction = rescore(pl);
+                    PrunedList rescoredPredictions =
+                        new PrunedList(maxNrOfComposedPredictions);
+                    rescoredPredictions.addAll(rescore(pl));
+                    // System.out.println(pl.get(0).getValue());
+                    // bestPred.partialTransitionFunction.addCopy(
+                    //     pl.get(0).partialTransitionFunction);
                     bestPred.partialTransitionFunction.addCopy(
-                        bestPrediction.partialTransitionFunction);
+                        rescoredPredictions.get(0).partialTransitionFunction);
                 } else {
                     return null;
                 }
@@ -167,8 +175,12 @@ public class SecondStageProcessor {
         PrunedList bestRealizations = getBest(amr, amr.dag.getRoot());
 
         if (!bestRealizations.isEmpty()) {
-            Prediction bestPrediction = rescore(bestRealizations);
-            return bestPrediction;
+            PrunedList rescoredPredictions =
+                new PrunedList(maxNrOfComposedPredictions);
+            rescoredPredictions.addAll(rescore(bestRealizations));
+            // System.out.println(bestRealizations.get(0).getValue());
+            // return bestRealizations.get(0);
+            return rescoredPredictions.get(0);
         }
         return null;
     }
@@ -369,6 +381,24 @@ public class SecondStageProcessor {
                             edgeRealizationPredictions, e,
                             realizationPrediction);
                     }
+
+                    // TODO
+                    // PrunedList newBestOrderRealizations =
+                    //     new PrunedList(maxNrOfComposedPredictions);
+                    // int listSize = rescorePredictions.size();
+                    // int chunkSize = 16;
+                    // for (int i = 0; i < listSize; i += chunkSize) {
+                    //     System.out.printf(
+                    //         "rescore: %d\n", rescorePredictions.size());
+                    //     newBestOrderRealizations.addAll(
+                    //         rescore(new ArrayList<Prediction>(
+                    //             rescorePredictions.subList(
+                    //                 i, Math.min(listSize, i + chunkSize)))));
+                    // }
+                    // bestOrderRealizations = newBestOrderRealizations;
+
+                    // rescorePredictions.clear();
+                    // TODO
 
                     for (Prediction p : bestOrderRealizations) {
                         double orderingScore = reorderingWeight
@@ -594,6 +624,10 @@ public class SecondStageProcessor {
                         p.partialTransitionFunction.addCopy(
                             p2.partialTransitionFunction);
                         ret.add(p);
+
+                        // TODO
+                        // rescorePredictions.add(p);
+                        // TODO
                     }
                 }
             }
@@ -1025,18 +1059,20 @@ public class SecondStageProcessor {
     }
 
     /**
-     * Helper function to rescore the n-best predictions using a neural network
+     * Helper function to rescore a list of predictions using a neural network
      * language model.
-     * @param bestRealizations the n-best predictions
+     * @param predictions the list of predictions to be rescored
      */
-    private Prediction rescore(PrunedList bestRealizations) {
+    private ArrayList<Prediction> rescore(ArrayList<Prediction> predictions) {
+        ArrayList<Prediction> rescoredPredictions =
+            new ArrayList<>(predictions);
         ArrayList<String> sentences = new ArrayList<>();
-        bestRealizations.forEach((p) -> sentences.add(p.getValue()));
+        predictions.forEach((p) -> sentences.add(p.getValue()));
         List<Double> scores = nnLanguageModel.scoreSentences(sentences);
         // normalise scores such that shorter realizations are not preferred by
         // default
         int index = 0;
-        for (Prediction p : bestRealizations) {
+        for (Prediction p : rescoredPredictions) {
             int articleCount = 0, remainingCount = 0;
             List<String> sentence = toArray(p.getValue());
             for (String word : sentence) {
@@ -1046,32 +1082,18 @@ public class SecondStageProcessor {
                     remainingCount++;
             }
             double quotient = remainingCount + articleCount * articleLmWeight;
-            // weigh the language model's score according to lmWeight and add
-            // the lmFreeScore, matching the original calculation of a
-            // prediction's score
-            scores.set(index,
-                (p.getLmFreeScore() + lmWeight * scores.get(index)) / quotient);
+            scores.set(index, (scores.get(index)) / quotient);
+            // // weigh the language model's score according to lmWeight and add
+            // // the lmFreeScore, matching the original calculation of a
+            // // prediction's score -- worse score
+            // scores.set(index,
+            //     (p.getLmFreeScore() + lmWeight * scores.get(index)) /
+            //     quotient);
+            p.setScoreAndLmFreeScore(scores.get(index));
             index++;
         }
 
-        // determine the best score
-        double maxScore = Integer.MIN_VALUE;
-        Prediction bestPrediction = null;
-        int i = 0;
-        for (Prediction p : bestRealizations) {
-            if (scores.get(i) > maxScore) {
-                bestPrediction = p;
-                maxScore = scores.get(i);
-            }
-            i++;
-        }
-
-        // in case the original predictions have a score of -INFINITY, take the
-        // original best prediction
-        if (bestPrediction == null) {
-            bestPrediction = bestRealizations.get(0);
-        }
-        return bestPrediction;
+        return rescoredPredictions;
     }
 
     /**

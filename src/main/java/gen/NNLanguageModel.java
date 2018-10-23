@@ -3,7 +3,6 @@ package gen;
 import main.PathList;
 
 import java.io.*;
-import java.net.*;
 import java.util.*;
 
 /**
@@ -13,31 +12,26 @@ import java.util.*;
  */
 
 public class NNLanguageModel {
-    PrintWriter out;
-    BufferedReader in;
-    Socket socket = null;
-    ServerSocket serverSocket = null;
+    BufferedWriter pInput;
+    BufferedReader pOutput;
 
     /**
-     * Create a new connection to a script providing a neural network language
-     * model.
+     * Invoke and communicate with a python script providing a neural network
+     * language model.
      * @param modelName the type of neural network language model to use
      * (possible values: "awd_lstm_lm_1150", "awd_lstm_lm_600",
      * "standard_lstm_lm_1500", "standard_lstm_lm_650", "standard_lstm_lm_200")
      */
     public NNLanguageModel(String modelName) {
         try {
-            serverSocket = new ServerSocket(32000);
             String command = "python " + PathList.NN_LANGUAGE_MODEL_PATH
                 + " -m " + modelName;
-            Runtime.getRuntime().exec(command);
-            socket = serverSocket.accept();
-            System.out.println("Connected");
-            out = new PrintWriter(new BufferedWriter(new OutputStreamWriter(
-                                      socket.getOutputStream())),
-                true);
-            in = new BufferedReader(
-                new InputStreamReader(socket.getInputStream()));
+            Process p = Runtime.getRuntime().exec(command);
+            pInput =
+                new BufferedWriter(new OutputStreamWriter(p.getOutputStream()));
+            pOutput =
+                new BufferedReader(new InputStreamReader(p.getInputStream()));
+            System.out.println(pOutput.readLine());
         } catch (Exception e) {
             System.exit(1);
         }
@@ -76,10 +70,11 @@ public class NNLanguageModel {
                 lineSend += " <pad>";
             }
         }
+        lineSend += "\n";
         try {
-            send(lineSend);
-            flush();
-            String lineRecv = recv();
+            pInput.write(lineSend);
+            pInput.flush();
+            String lineRecv = pOutput.readLine();
             List<Double> scores = new ArrayList<>();
             // split up the received string (representing the scores)
             for (String s : Arrays.asList(lineRecv.split(" "))) {
@@ -90,27 +85,5 @@ public class NNLanguageModel {
             System.exit(1);
         }
         return null;
-    }
-
-    /**
-     * Helper function that writes a message to the python script.
-     * @param msg the string that is to be sent
-     */
-    private void send(String msg) {
-        out.println(msg);
-    }
-
-    /**
-     * Helper function that flushes the message, i.e., actually sends it out.
-     */
-    private void flush() {
-        out.flush();
-    }
-
-    /**
-     * Helper function for receiving any incoming answer from the python script.
-     */
-    private String recv() throws Exception {
-        return in.readLine();
     }
 }

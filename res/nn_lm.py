@@ -1,42 +1,9 @@
-import socket
 import numpy as np
 import gluonnlp as nlp
 import mxnet as mx
 
 import sys
 import argparse
-
-class NNLanguageModelClient:
-    """Client to communicate with the amr-gen java project.
-
-    Parameters
-    ----------
-    model_name: str
-        The type of neural network language model to use. Options are
-        'awd_lstm_lm_1150', 'awd_lstm_lm_600', 'standard_lstm_lm_1500',
-        'standard_lstm_lm_650', 'standard_lstm_lm_200'
-    """
-    def __init__(self, model_name):
-        self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.s.connect(("localhost", 32000))
-        self.f = self.s.makefile('rw')
-        self.lm = NNLanguageModel(model_name)
-        self.listenLoop()
-
-    def listenLoop(self):
-        """Listen to the java server for any requests to score sentences.
-
-        The incoming strings have to be of the form '[n, s_0, ..., s_n-1]' where
-        n is the batch size (number of sentences and s_i for 0<=i< n are the
-        sentences to be scored.
-        """
-        f = self.f
-        print("connected")
-        while True:
-            line = f.readline()
-            line = line.split(" ", 1)
-            f.write(str(self.lm.score(line[1], int(line[0]))) + '\n')
-            f.flush()
 
 class NNLanguageModel:
     """Neural network language model to score natural language sentences.
@@ -65,8 +32,8 @@ class NNLanguageModel:
         self.model, self.vocab = nlp.model.get_model(self.model_name,
                                         dataset_name='wikitext-2',
                                         pretrained=True)
-        print(self.model)
-        print(self.vocab)
+        #  print(self.model)
+        #  print(self.vocab)
         self.num_gpus = 0
         self.context = [mx.gpu(i) for i in
                 range(self.num_gpus)] if self.num_gpus else [mx.cpu()]
@@ -141,4 +108,13 @@ if __name__ == '__main__':
         standard_lstm_lm_200 (default: awd_lstm_lm_600).", default =
         'awd_lstm_lm_600')
     args = parser.parse_args()
-    lm_client = NNLanguageModelClient(args.model)
+    f = open("nn_lm.log", "w")
+    original_stderr = sys.stderr
+    sys.stderr = f
+    lm = NNLanguageModel(args.model)
+    print("Loaded", args.model, "language model.", flush=True)
+    while True:
+        line = sys.stdin.readline()
+        #  print("line: ", line, file=f)
+        line = line.split(" ", 1)
+        print(str(lm.score(line[1].rstrip('\n'), int(line[0]))), flush=True);

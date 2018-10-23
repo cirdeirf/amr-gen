@@ -100,11 +100,11 @@ public class PathList {
     public static final String LANGUAGE_MODEL_PATH = BASEPATH + "res/lm.binary";
 
     /**
-     * path to the python client which uses GluonNLP's neural network language
+     * path to the python script which uses GluonNLP's neural network language
      * models to score sentences
      */
     public static final String NN_LANGUAGE_MODEL_PATH =
-        BASEPATH + "res/nn_lm_client.py";
+        BASEPATH + "res/nn_lm.py";
 
     /**
      * path to the parts of speech (POS) maximum entropy model to be used by the
