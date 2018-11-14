@@ -7,6 +7,7 @@ import edu.stanford.nlp.ling.BasicDatum;
 import edu.stanford.nlp.ling.Datum;
 import edu.stanford.nlp.stats.Counter;
 import edu.stanford.nlp.stats.Counters;
+import edu.stanford.nlp.util.Index;
 import misc.Debugger;
 import opennlp.tools.ml.maxent.GISModel;
 import opennlp.tools.ml.model.Event;
@@ -139,6 +140,13 @@ public abstract class StanfordMaxentModelImplementation {
             }
         } else {
             loadModelFromFile(filename);
+            // TODO remove
+            System.out.printf("%d", classifier.featureIndex().size());
+            if (filename.equals("models/first_stage.model")) {
+                System.out.println("");
+                System.out.println(classifier.toString("HighWeight", 10));
+                System.out.println(classifier.labels());
+            }
         }
         System.out.println("");
     }
@@ -253,6 +261,17 @@ public abstract class StanfordMaxentModelImplementation {
         return factory.getSigma();
     }
 
+    // TODO add description (untestet)
+    public List<List<Datum<String, String>>> getDataForReinforcing(
+        List<Amr> reinforceAmrs) {
+        List<List<Datum<String, String>>> ret =
+            new ArrayList<List<Datum<String, String>>>();
+        for (Amr amr : reinforceAmrs) {
+            ret.add(deriveDatumList(Collections.singletonList(amr)));
+        }
+        return ret;
+    }
+
     private List<Datum<String, String>> deriveDatumList(List<Amr> amrs) {
         List<Datum<String, String>> datumList = new ArrayList<>();
 
@@ -264,7 +283,7 @@ public abstract class StanfordMaxentModelImplementation {
         return datumList;
     }
 
-    private void saveModelToFile(String filename) {
+    public void saveModelToFile(String filename) {
         if (classifier == null)
             throw new AssertionError("model is null, cannot be saved");
         LinearClassifier.writeClassifier(classifier, filename);
@@ -371,5 +390,96 @@ public abstract class StanfordMaxentModelImplementation {
     public void applyModification(Amr amr, Vertex vertex, String prediction) {
         throw new AssertionError(
             "applyModification(Amr, Vertex, String) must be overwritten in order for test(Amr,Boolean) to work");
+    }
+
+    // TODO add documentation
+    public void reinforce(List<Amr> amrs,
+        List<List<Datum<String, String>>> events, double learningRate) {
+        Index<String> featureIndex = classifier.featureIndex();
+        Index<String> labelIndex = classifier.labelIndex();
+        double[][] weights = classifier.weights();
+        double[][] delta = new double[featureIndex.size()][labelIndex.size()];
+
+        List<Datum<String, String>> datumList = new ArrayList<>();
+        // // \sum_{x, y} -- x: context/(amr, v), y: result/transition
+        // \sum_{x, y} -- x = amr, y = sentence
+        int l = 0;
+        int dec = (int) ((double) amrs.size() / 10) + 1;
+        int perc = 0;
+        for (Amr amr : amrs) {
+            // System.out.printf("%-5d %s\n", l, Arrays.toString(amr.sentence));
+            if (l % dec == 0) {
+                perc += 10;
+                System.out.printf("%d%%\n", perc);
+            }
+            double[][] amrDelta =
+                new double[featureIndex.size()][labelIndex.size()];
+            // \sum_{a_{1:m}}
+            // only one sequence (oracle)
+            // datumList: a_{1:m}
+            datumList = events.get(l);
+            if (datumList.isEmpty()) {
+                l++;
+                continue;
+            }
+
+            // (r(y) - b(y)) *
+            // missing (unnecessary for oracle sequence)
+
+            // (\prod_{i=1}^{m} f_{NN}(s_i, a_i; \Theta)) *
+            double sequenceProbability = 1;
+            for (Datum<String, String> d : datumList) {
+                Counter<String> scores = classifier.probabilityOf(d);
+                sequenceProbability *= scores.getCount(d.label());
+            }
+
+            // \sum_{i=1}^{m}(
+            for (Datum<String, String> d : datumList) {
+                List<Integer> activeFeatures = new ArrayList<>();
+                for (String feature : d.asFeatures()) {
+                    // some feature seem to be unknown
+                    if (featureIndex.indexOf(feature) != -1) {
+                        activeFeatures.add(featureIndex.indexOf(feature));
+                    }
+                }
+
+                // \sum_{a'}(f_{NN}(s_i, a'; \Theta) * f_j(s_i, a'))
+                // maybe f_{j, a} - score * f_{j, a} does the trick as well
+                Counter<String> scores = classifier.probabilityOf(d);
+                double[][] actionProbability =
+                    new double[featureIndex.size()][labelIndex.size()];
+                // for each a'
+                for (int i = 0; i < labelIndex.size(); i++) {
+                    for (int j : activeFeatures) {
+                        for (int a = 0; a < labelIndex.size(); a++) {
+                            actionProbability[j][a] +=
+                                scores.getCount(labelIndex.get(i))
+                                * (a == i ? 1 : 0);
+                        }
+                    }
+                }
+
+                // f_j(s_i, a_i) -
+                for (int j : activeFeatures) {
+                    for (int a = 0; a < labelIndex.size(); a++) {
+                        amrDelta[j][a] +=
+                            (a == labelIndex.indexOf(d.label()) ? 1 : 0)
+                            - actionProbability[j][a];
+                    }
+                }
+            }
+            for (int j = 0; j < featureIndex.size(); j++) {
+                for (int a = 0; a < labelIndex.size(); a++) {
+                    delta[j][a] += amrDelta[j][a];
+                }
+            }
+            l++;
+        }
+        for (int i = 0; i < weights.length; i++) {
+            for (int j = 0; j < weights[0].length; j++) {
+                weights[i][j] +=
+                    (1 / (double) amrs.size()) * learningRate * delta[i][j];
+            }
+        }
     }
 }

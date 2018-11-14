@@ -86,6 +86,17 @@ public class FirstStageProcessor {
         Debugger.println("done training first stage");
     }
 
+    // TODO description
+    public List<List<Datum<String, String>>> getDataForReinforcing(
+        List<Amr> reinforceAmrs) {
+        List<List<Datum<String, String>>> ret =
+            new ArrayList<List<Datum<String, String>>>();
+        for (Amr amr : reinforceAmrs) {
+            ret.add(getDataForTrainingFirstStage(amr));
+        }
+        return ret;
+    }
+
     /**
      * Processes a list of AMR graphs by performing all gold MERGE, SWAP, DELETE
      * and KEEP transitions and returns the corresponding (feature, transition)
@@ -93,7 +104,7 @@ public class FirstStageProcessor {
      * @param amrs the AMR graphs to process
      * @return the (feature, transition) vectors
      */
-    private List<Datum<String, String>> getDataForTrainingFirstStage(
+    public List<Datum<String, String>> getDataForTrainingFirstStage(
         List<Amr> amrs) {
         List<Datum<String, String>> ret = new ArrayList<>();
         for (Amr amr : amrs) {

@@ -149,11 +149,35 @@ public class AmrMain {
             jCommander.usage();
         }
 
+        else if (gen.train) {
+            // optimizeHyperparams();
+            // setUp(Arrays.asList(Models.POS, Models.DENOM, Models.NUMBER,
+            //           Models.TENSE, Models.VOICE),
+            //     true);
+            setUp(Arrays.asList(Models.FIRST_STAGE), true);
+            // setUp(Arrays.asList(Models.REALIZE), false);
+            // setUp(Arrays.asList(Models.REORDER, Models.REORDER_RIGHT,
+            //           Models.REORDER_LEFT, Models.REALIZE),
+            //     false);
+            // // true
+            // pos, denom, number, tense, voice
+            // insert_others, insert_args, insert_child
+            // first_stage
+            // // false
+            // reorder, reorder_right, reorder_left, realize
+        }
+
+        else if (gen.reinforce) {
+            setUp();
+            reinforce(Arrays.asList(Models.FIRST_STAGE), 0.1, 500);
+        }
+
         // generate sentences from a list of AMR graphs
         else {
             if (gen.outputFile == null) {
                 throw new AssertionError(
-                    "an output file must be specified using '--output path/to/output'.");
+                    "an output file must be specified using"
+                    + " '--output path/to/output'.");
             }
 
             setUp();
@@ -251,6 +275,105 @@ public class AmrMain {
             }
             Hyperparam.update(newBest);
             firstIter = false;
+        }
+    }
+
+    // TODO description
+    private void reinforce(List<Models> modelsToReinforce, double learningRate,
+        int batchSize) throws IOException, JWNLException {
+        Debugger.println("starting reinforcing models with batchSize "
+            + batchSize + " and learningRate " + learningRate);
+        List<Amr> trainingAmrs = loadAmrGraphs(PathList.TRAINING_DIR, false);
+
+        // TODO change to DEV_DIR
+        List<Amr> devAmrs = loadAmrGraphs(PathList.TEST_DIR, true);
+        List<String> generatedSentences;
+        double bestScore = 0;
+        // double bestScore = 0.2738084714254663;
+
+        // TODO iterate over all models
+        StanfordMaxentModelImplementation model;
+        for (Models modelName : modelsToReinforce) {
+            // TODO add remaining maxentModels
+            switch (modelName) {
+                case FIRST_STAGE:
+                    model = maxentModels.firstStageMaxentModel;
+                    // TODO check why this is responsible for better scores
+                    firstStageProcessor.getDataForTrainingFirstStage(
+                        trainingAmrs);
+                    break;
+                case DENOM:
+                    model = maxentModels.denomMaxentModel;
+                    break;
+                default:
+                    throw new AssertionError(
+                        "no model to reinforce has been given.");
+            }
+            double[][] weights = model.classifier.weights();
+            for (int i = 1; i <= 2; i++) {
+                Debugger.println("----------------------------------");
+                Debugger.println("Reinforce iteration #" + i
+                    + " (learningRate: " + learningRate + ")");
+                if (bestScore == 0) {
+                    // TODO save best score so far in meta file
+                    Debugger.println("Determine current best Score");
+                    generatedSentences = generate(devAmrs, true, true);
+                    bestScore = getBleu(devAmrs, generatedSentences);
+                    System.out.println(bestScore);
+                    Debugger.println("(current best = " + bestScore + ")");
+                }
+                double[][] oldWeights = new double[weights.length][];
+                for (int k = 0; k < weights.length; k++) {
+                    oldWeights[k] =
+                        Arrays.copyOf(weights[k], weights[k].length);
+                }
+                for (int k = 0; k < model.classifier.labelIndex().size(); k++) {
+                    System.out.printf(
+                        "weights[38][%d] % 02.5f\n", k, weights[38][k]);
+                }
+
+                List<Amr> reinforceAmrs = new ArrayList<>();
+                Collections.shuffle(trainingAmrs, new Random(i));
+                for (int j = 0; j < batchSize; j++) {
+                    reinforceAmrs.add(trainingAmrs.get(j));
+                }
+
+                // TODO generalise getDataForReinforcing
+                // model.getDataForReinforcing(reinforceAmrs)
+                Debugger.println("starting gradient step");
+                if (modelName == Models.FIRST_STAGE) {
+                    model.reinforce(reinforceAmrs,
+                        firstStageProcessor.getDataForReinforcing(
+                            reinforceAmrs),
+                        learningRate);
+                } else {
+                    model.reinforce(reinforceAmrs,
+                        firstStageProcessor.getDataForReinforcing(
+                            reinforceAmrs),
+                        learningRate);
+                }
+                for (int k = 0; k < model.classifier.labelIndex().size(); k++) {
+                    System.out.printf("weights[38][%d] % 02.5f (% 02.5f)\n", k,
+                        weights[38][k], weights[38][k] - oldWeights[38][k]);
+                }
+                Debugger.println("finished gradient step");
+
+                // evaluate
+                devAmrs = loadAmrGraphs(PathList.TEST_DIR, true);
+                generatedSentences = generate(devAmrs, true, true);
+                double score = getBleu(devAmrs, generatedSentences);
+                Debugger.println(
+                    "BLEU = " + score + " (current best = " + bestScore + ")");
+                if (score <= bestScore) {
+                    weights = oldWeights;
+                    learningRate *= 0.5;
+                } else {
+                    bestScore = score;
+                }
+                Debugger.println("----------------------------------");
+            }
+            // TODO save model
+            // model.saveModelToFile(PathList.FIRST_STAGE_MAXENT_PATH);
         }
     }
 
@@ -483,9 +606,26 @@ public class AmrMain {
         Debugger.println("starting second-stage processing of " + amrs.size()
             + " AMR graphs...");
 
+        // TODO more precise percentage (actually quits if reached 100%)
+        int index = 1;
+        // long timeStep;
+        int dec = (int) ((double) amrs.size() / 10) + 1;
+        int perc = 0;
         for (Amr amr : amrs) {
+            // timeStep = System.nanoTime();
+            // System.out.printf("%4d / %d\n", index, amrs.size());
+            if (index % dec == 0) {
+                perc += 10;
+                System.out.printf("%d%%\n", perc);
+            }
             generatedSentences.add(
                 secondStageProcessor.getBestRealizationAsString(amr));
+            // System.out.printf(" ...(%f)\n",
+            //     (double) (System.nanoTime() - timeStep) / (1000000000.0));
+            index++;
+        }
+        if (perc < 100) {
+            System.out.printf("%d%%\n", perc);
         }
 
         Debugger.println("finished second-stage processing of " + amrs.size()
@@ -681,10 +821,10 @@ public class AmrMain {
 
     /**
      * Loads a list of AMR graphs from a given directory.
-     * @param directory the directory from which the AMR graphs are loaded. This
-     * directory must not directly contain the AMR graphs, but instead contain
-     * subdirectories as specified by {@link PathList#AMR_SUBDIRECTORIES} in
-     * which the actual AMR graphs are stored.
+     * @param directory the directory from which the AMR graphs are loaded.
+     * This directory must not directly contain the AMR graphs, but instead
+     * contain subdirectories as specified by {@link
+     * PathList#AMR_SUBDIRECTORIES} in which the actual AMR graphs are stored.
      * @param forTesting whether the AMR graphs should be prepared for testing
      * (in which case no gold annotations, POS tagging and alignments are
      * loaded) or for training
@@ -697,10 +837,10 @@ public class AmrMain {
 
     /**
      * Loads a list of AMR graphs from a given directory.
-     * @param directory the directory from which the AMR graphs are loaded. This
-     * directory must not directly contain the AMR graphs, but instead contain
-     * subdirectories as specified by {@link PathList#AMR_SUBDIRECTORIES} in
-     * which the actual AMR graphs are stored.
+     * @param directory the directory from which the AMR graphs are loaded.
+     * This directory must not directly contain the AMR graphs, but instead
+     * contain subdirectories as specified by {@link
+     * PathList#AMR_SUBDIRECTORIES} in which the actual AMR graphs are stored.
      * @param forTesting whether the AMR graphs should be prepared for testing
      * (in which case no gold annotations, POS tagging and alignments are
      * loaded) or for training
@@ -708,11 +848,11 @@ public class AmrMain {
      * subdirectory. If all AMR graphs should be loaded, simply set this to some
      * value below zero
      * @param minRealLength the minimum length (in words) of the reference
-     * realization for each AMR graph to be included in the returned list. If
-     * this is set to some value &lt;0, all AMR graphs are included.
+     * realization for each AMR graph to be included in the returned list.
+     * If this is set to some value &lt;0, all AMR graphs are included.
      * @param maxRealLenght the maximum length (in words) of the reference
-     * realization for each AMR graph to be included in the returned list. If
-     * this is set to some value &lt;0, all AMR graphs are included.
+     * realization for each AMR graph to be included in the returned list.
+     * If this is set to some value &lt;0, all AMR graphs are included.
      * @return the preprocessed AMR graphs
      */
     private List<Amr> loadAmrGraphs(String directory, boolean forTesting,
@@ -852,4 +992,11 @@ class CommandGenerate {
             "Show pairs of (reference realization, generated sentence) in the console when the generator is finished. "
             + "This is only possible if the AMR graphs are stored with tokenized reference realizations in the input file.")
     Boolean printOutputToStdout = false;
+
+    @Parameter(names = {"--train", "-t"}, description = "Train given models.")
+    Boolean train = false;
+
+    @Parameter(
+        names = {"--reinforce", "-r"}, description = "Reinforce given models.")
+    Boolean reinforce = false;
 }
