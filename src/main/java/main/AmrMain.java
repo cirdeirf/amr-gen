@@ -278,48 +278,108 @@ public class AmrMain {
         }
     }
 
-    // TODO description
+    // TODO documentation
     private void reinforce(List<Models> modelsToReinforce, double learningRate,
         int batchSize) throws IOException, JWNLException {
-        Debugger.println("starting reinforcing models with batchSize "
-            + batchSize + " and learningRate " + learningRate);
-        List<Amr> trainingAmrs = loadAmrGraphs(PathList.TRAINING_DIR, false);
+        Debugger.println("starting reinforcing with batchSize " + batchSize
+            + " and learningRate " + learningRate);
 
-        // TODO change to DEV_DIR
-        List<Amr> devAmrs = loadAmrGraphs(PathList.TEST_DIR, true);
+        List<Amr> trainingAmrs;
+        List<Amr> devAmrs;
         List<String> generatedSentences;
+        String filename;
+        double startLearningRate = learningRate;
+        double startScore;
         double bestScore = 0;
-        // double bestScore = 0.2738084714254663;
+        // double bestScore = 0.2745286608;
+        startScore = bestScore;
 
-        // TODO iterate over all models
         StanfordMaxentModelImplementation model;
         for (Models modelName : modelsToReinforce) {
+            learningRate = startLearningRate;
+            Debugger.println("----------------------------------");
+            Debugger.println("Model " + modelName);
+            trainingAmrs = loadAmrGraphs(PathList.TRAINING_DIR, false);
             // TODO add remaining maxentModels
             switch (modelName) {
+                case POS:
+                    model = maxentModels.posMaxentModel;
+                    filename = PathList.POS_MAXENT_PATH;
+                    break;
+                case TENSE:
+                    model = maxentModels.tenseMaxentModel;
+                    filename = PathList.TENSE_MAXENT_PATH;
+                    break;
+                case VOICE:
+                    model = maxentModels.voiceMaxentModel;
+                    filename = PathList.VOICE_MAXENT_PATH;
+                    break;
+                case DENOM:
+                    model = maxentModels.denomMaxentModel;
+                    filename = PathList.DENOM_MAXENT_PATH;
+                    break;
+                case NUMBER:
+                    model = maxentModels.numberMaxentModel;
+                    filename = PathList.NUMBER_MAXENT_PATH;
+                    break;
                 case FIRST_STAGE:
                     model = maxentModels.firstStageMaxentModel;
                     // TODO check why this is responsible for better scores
                     firstStageProcessor.getDataForTrainingFirstStage(
                         trainingAmrs);
+                    filename = PathList.FIRST_STAGE_MAXENT_PATH;
                     break;
-                case DENOM:
-                    model = maxentModels.denomMaxentModel;
+                case INSERT_OTHERS:
+                    model = maxentModels.otherInsertionMaxentModel;
+                    filename = PathList.OTHERS_INSERTION_MAXENT_PATH;
                     break;
+                case INSERT_CHILD:
+                    model = maxentModels.childInsertionMaxentModel;
+                    filename = PathList.CHILD_INSERTION_MAXENT_PATH;
+                    break;
+                case INSERT_ARGS:
+                    model = maxentModels.argInsertionMaxentModel;
+                    filename = PathList.ARG_INSERTION_MAXENT_PATH;
+                    break;
+                case REORDER:
+                    // needed for these models
+                    firstStageProcessor.processFirstStage(trainingAmrs);
+                    model = maxentModels.parentChildReorderMaxentModel;
+                    filename = PathList.REORDER_MAXENT_PATH;
+                    break;
+                case REORDER_LEFT:
+                    firstStageProcessor.processFirstStage(trainingAmrs);
+                    model = maxentModels.leftMaxEnt;
+                    filename = PathList.LEFT_REORDER_MAXENT_PATH;
+                    break;
+                case REORDER_RIGHT:
+                    firstStageProcessor.processFirstStage(trainingAmrs);
+                    model = maxentModels.rightMaxEnt;
+                    filename = PathList.RIGHT_REORDER_MAXENT_PATH;
+                    break;
+                // TODO reinforce for OpenNlpMaxentModelImplementation
+                // case REALIZE:
+                //     model = maxentModels.realizeMaxentModel;
+                //     filename = PathList.REALIZE_MAXENT_PATH;
+                //     break;
                 default:
                     throw new AssertionError(
                         "no model to reinforce has been given.");
             }
             double[][] weights = model.classifier.weights();
-            for (int i = 1; i <= 2; i++) {
+            for (int i = 1; i <= 5; i++) {
                 Debugger.println("----------------------------------");
-                Debugger.println("Reinforce iteration #" + i
-                    + " (learningRate: " + learningRate + ")");
+                Debugger.println("Reinforce iteration #" + i);
+                Debugger.println("(" + modelName + ", "
+                    + "learningRate: " + learningRate + ")");
+                Debugger.println("----------------------------------");
                 if (bestScore == 0) {
                     // TODO save best score so far in meta file
-                    Debugger.println("Determine current best Score");
+                    Debugger.println("determine current best score");
+                    devAmrs = loadAmrGraphs(PathList.DEVELOPMENT_DIR, true);
                     generatedSentences = generate(devAmrs, true, true);
                     bestScore = getBleu(devAmrs, generatedSentences);
-                    System.out.println(bestScore);
+                    startScore = bestScore;
                     Debugger.println("(current best = " + bestScore + ")");
                 }
                 double[][] oldWeights = new double[weights.length][];
@@ -329,7 +389,7 @@ public class AmrMain {
                 }
                 for (int k = 0; k < model.classifier.labelIndex().size(); k++) {
                     System.out.printf(
-                        "weights[38][%d] % 02.5f\n", k, weights[38][k]);
+                        "weights[38][%d] % 02.7f\n", k, weights[38][k]);
                 }
 
                 List<Amr> reinforceAmrs = new ArrayList<>();
@@ -339,7 +399,6 @@ public class AmrMain {
                 }
 
                 // TODO generalise getDataForReinforcing
-                // model.getDataForReinforcing(reinforceAmrs)
                 Debugger.println("starting gradient step");
                 if (modelName == Models.FIRST_STAGE) {
                     model.reinforce(reinforceAmrs,
@@ -348,33 +407,38 @@ public class AmrMain {
                         learningRate);
                 } else {
                     model.reinforce(reinforceAmrs,
-                        firstStageProcessor.getDataForReinforcing(
-                            reinforceAmrs),
+                        model.getDataForReinforcing(reinforceAmrs),
                         learningRate);
                 }
                 for (int k = 0; k < model.classifier.labelIndex().size(); k++) {
-                    System.out.printf("weights[38][%d] % 02.5f (% 02.5f)\n", k,
+                    System.out.printf("weights[38][%d] % 02.7f (% 02.9f)\n", k,
                         weights[38][k], weights[38][k] - oldWeights[38][k]);
                 }
                 Debugger.println("finished gradient step");
 
                 // evaluate
-                devAmrs = loadAmrGraphs(PathList.TEST_DIR, true);
+                devAmrs = loadAmrGraphs(PathList.DEVELOPMENT_DIR, true);
                 generatedSentences = generate(devAmrs, true, true);
                 double score = getBleu(devAmrs, generatedSentences);
                 Debugger.println(
                     "BLEU = " + score + " (current best = " + bestScore + ")");
                 if (score <= bestScore) {
-                    weights = oldWeights;
+                    // weights = oldWeights
+                    for (int k = 0; k < weights.length; k++) {
+                        weights[k] =
+                            Arrays.copyOf(oldWeights[k], oldWeights[k].length);
+                    }
                     learningRate *= 0.5;
                 } else {
                     bestScore = score;
+                    model.saveModelToFile(filename);
                 }
-                Debugger.println("----------------------------------");
             }
-            // TODO save model
-            // model.saveModelToFile(PathList.FIRST_STAGE_MAXENT_PATH);
+            // TODO at the end of each model reinforcement or after each best?
+            // model.saveModelToFile(filename);
         }
+        Debugger.println(
+            "finished reinforcing (" + startScore + " -> " + bestScore + ")");
     }
 
     /**
