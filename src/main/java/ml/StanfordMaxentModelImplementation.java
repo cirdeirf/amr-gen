@@ -394,7 +394,8 @@ public abstract class StanfordMaxentModelImplementation {
 
     // TODO add documentation
     public void reinforce(List<Amr> amrs,
-        List<List<Datum<String, String>>> events, double learningRate) {
+        List<List<Datum<String, String>>> events, List<Double> rewards,
+        double learningRate) {
         Index<String> featureIndex = classifier.featureIndex();
         Index<String> labelIndex = classifier.labelIndex();
         double[][] weights = classifier.weights();
@@ -470,7 +471,7 @@ public abstract class StanfordMaxentModelImplementation {
             }
             for (int j = 0; j < featureIndex.size(); j++) {
                 for (int a = 0; a < labelIndex.size(); a++) {
-                    delta[j][a] += amrDelta[j][a];
+                    delta[j][a] += rewards.get(l) * amrDelta[j][a];
                 }
             }
             l++;

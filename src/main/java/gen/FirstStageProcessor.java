@@ -26,6 +26,9 @@ public class FirstStageProcessor {
     // the maximum entropy model for the first stage
     private FirstStageMaxentModel maxentModel;
 
+    // TODO docu: no reasonable way to get events after generation
+    public List<List<Datum<String, String>>> reinforceEvents;
+
     // the AMR graph that is currently being processed
     private Amr amr;
 
@@ -171,8 +174,9 @@ public class FirstStageProcessor {
      * @param amrs the AMR graphs to process
      */
     public void processFirstStage(List<Amr> amrs) {
+        reinforceEvents = new ArrayList<List<Datum<String, String>>>();
         for (Amr amr : amrs) {
-            processFirstStage(amr);
+            reinforceEvents.add(processFirstStage(amr));
         }
     }
 
@@ -183,8 +187,11 @@ public class FirstStageProcessor {
      * it implements the algorithm {@code generateGreedy_restr} as defined in
      * the thesis.
      * @param amr the AMR graph to process
+     * TODO add return value
      */
-    public void processFirstStage(Amr amr) {
+    public List<Datum<String, String>> processFirstStage(Amr amr) {
+        // TODO comment
+        List<Datum<String, String>> ret = new ArrayList<>();
         this.amr = amr;
         buffer = amr.dag.getVerticesBottomUp();
         swapMemory = new HashSet<>();
@@ -217,9 +224,12 @@ public class FirstStageProcessor {
 
             // apply the best found action
             if (!bestTransition.isEmpty()) {
+                ret.add(new BasicDatum(
+                    datumList.get(0).asFeatures(), bestTransition));
                 applyTransition(current, bestTransition);
             }
         }
+        return ret;
     }
 
     /**

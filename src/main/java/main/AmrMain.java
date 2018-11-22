@@ -10,6 +10,7 @@ import edu.stanford.nlp.mt.metrics.BLEUMetric;
 import edu.stanford.nlp.mt.util.ArraySequence;
 import edu.stanford.nlp.mt.util.Sequence;
 import edu.stanford.nlp.tagger.maxent.MaxentTagger;
+import edu.stanford.nlp.ling.Datum;
 import gen.*;
 import misc.Debugger;
 import misc.StaticHelper;
@@ -42,17 +43,16 @@ public class AmrMain {
     private boolean setUp = false;
 
     public static void main(String[] args) throws IOException, JWNLException {
-        args = new String[] {"-i", "in1.txt", "-o", "out1.txt"};
+        // args = new String[] {"-i", "in1.txt", "-o", "out1.txt"};
 
         Amr.setUp();
         AmrMain main = new AmrMain(args);
 
-        System.in.read();
-        main.demo1();
-        System.in.read();
-        main.demo2();
-        System.in.read();
-        main.demo3();
+        // main.demo1();
+        // System.in.read();
+        // main.demo2();
+        // System.in.read();
+        // main.demo3();
     }
 
     // generates a sentence from the "the developer wants to sleep" AMR graph
@@ -167,9 +167,11 @@ public class AmrMain {
             // reorder, reorder_right, reorder_left, realize
         }
 
+        // TODO not applicable to realize and no random for ordering/insert
         else if (gen.reinforce) {
             setUp();
-            reinforce(Arrays.asList(Models.FIRST_STAGE), 0.1, 500);
+            // 0
+            reinforce(Arrays.asList(Models.FIRST_STAGE), 0.1, 500, true);
         }
 
         // generate sentences from a list of AMR graphs
@@ -209,12 +211,12 @@ public class AmrMain {
 
     /**
      * Optimizes hyperparameters of the fully trained generator using the
-     * development data found in the subdirectories (according to
-     * {@link PathList#AMR_SUBDIRECTORIES}) of {@link PathList#DEVELOPMENT_DIR}
-     * and writes the resulting best configuration of hyperparameters to the
-     * {@link PathList#HYPERPARAMS_LIST} file. <br/> <b>Important: </b> Note
-     * that this function never terminates; however, it can be terminated
-     * manually at all times.
+     * development data found in the subdirectories (according to {@link
+     * PathList#AMR_SUBDIRECTORIES}) of {@link PathList#DEVELOPMENT_DIR} and
+     * writes the resulting best configuration of hyperparameters to the {@link
+     * PathList#HYPERPARAMS_LIST} file. <br/> <b>Important: </b> Note that this
+     * function never terminates; however, it can be terminated manually at all
+     * times.
      */
     private void optimizeHyperparams() throws IOException, JWNLException {
         setUp();
@@ -280,7 +282,8 @@ public class AmrMain {
 
     // TODO documentation
     private void reinforce(List<Models> modelsToReinforce, double learningRate,
-        int batchSize) throws IOException, JWNLException {
+        int batchSize, boolean useOracleSequence)
+        throws IOException, JWNLException {
         Debugger.println("starting reinforcing with batchSize " + batchSize
             + " and learningRate " + learningRate);
 
@@ -291,7 +294,7 @@ public class AmrMain {
         double startLearningRate = learningRate;
         double startScore;
         double bestScore = 0;
-        // double bestScore = 0.2745286608;
+        // bestScore = 0.274058436;
         startScore = bestScore;
 
         StanfordMaxentModelImplementation model;
@@ -299,8 +302,15 @@ public class AmrMain {
             learningRate = startLearningRate;
             Debugger.println("----------------------------------");
             Debugger.println("Model " + modelName);
+
             trainingAmrs = loadAmrGraphs(PathList.TRAINING_DIR, false);
-            // TODO add remaining maxentModels
+            BigraphAlignmentBuilder builder = new BigraphAlignmentBuilder();
+            for (Amr amr : trainingAmrs) {
+                if (amr.dependencyTree != null) {
+                    builder.buildTypeAlignment(amr, amr.dependencyTree);
+                }
+            }
+
             switch (modelName) {
                 case POS:
                     model = maxentModels.posMaxentModel;
@@ -343,6 +353,7 @@ public class AmrMain {
                     break;
                 case REORDER:
                     // needed for these models
+                    // TODO maybe not for !useOracleSequence
                     firstStageProcessor.processFirstStage(trainingAmrs);
                     model = maxentModels.parentChildReorderMaxentModel;
                     filename = PathList.REORDER_MAXENT_PATH;
@@ -367,7 +378,7 @@ public class AmrMain {
                         "no model to reinforce has been given.");
             }
             double[][] weights = model.classifier.weights();
-            for (int i = 1; i <= 5; i++) {
+            for (int i = 1; i <= 9; i++) {
                 Debugger.println("----------------------------------");
                 Debugger.println("Reinforce iteration #" + i);
                 Debugger.println("(" + modelName + ", "
@@ -387,11 +398,15 @@ public class AmrMain {
                     oldWeights[k] =
                         Arrays.copyOf(weights[k], weights[k].length);
                 }
-                for (int k = 0; k < model.classifier.labelIndex().size(); k++) {
-                    System.out.printf(
-                        "weights[38][%d] % 02.7f\n", k, weights[38][k]);
-                }
+                // for (int k = 0; k < model.classifier.labelIndex().size();
+                // k++) {
+                //     System.out.printf(
+                //         "weights[38][%d] % 02.7f\n", k, weights[38][k]);
+                // }
 
+                if (!useOracleSequence) {
+                    trainingAmrs = loadAmrGraphs(PathList.TRAINING_DIR, false);
+                }
                 List<Amr> reinforceAmrs = new ArrayList<>();
                 Collections.shuffle(trainingAmrs, new Random(i));
                 for (int j = 0; j < batchSize; j++) {
@@ -400,17 +415,82 @@ public class AmrMain {
 
                 // TODO generalise getDataForReinforcing
                 Debugger.println("starting gradient step");
-                if (modelName == Models.FIRST_STAGE) {
-                    model.reinforce(reinforceAmrs,
-                        firstStageProcessor.getDataForReinforcing(
-                            reinforceAmrs),
-                        learningRate);
+                List<List<Datum<String, String>>> reinforceEvents =
+                    new ArrayList<List<Datum<String, String>>>();
+                List<Double> rewards;
+                if (useOracleSequence) {
+                    if (modelName == Models.FIRST_STAGE) {
+                        reinforceEvents =
+                            firstStageProcessor.getDataForReinforcing(
+                                reinforceAmrs);
+                    } else {
+                        reinforceEvents =
+                            model.getDataForReinforcing(reinforceAmrs);
+                    }
+                    rewards = new ArrayList<>(
+                        Collections.nCopies(reinforceAmrs.size(), 1.0));
                 } else {
-                    model.reinforce(reinforceAmrs,
-                        model.getDataForReinforcing(reinforceAmrs),
-                        learningRate);
+                    List<String> rewardSentences =
+                        generate(reinforceAmrs, true, true);
+                    rewards = new ArrayList<>();
+                    for (int k = 0; k < reinforceAmrs.size(); k++) {
+                        rewards.add(getBleu(
+                            Collections.singletonList(reinforceAmrs.get(i)),
+                            Collections.singletonList(rewardSentences.get(i))));
+                    }
+                    if (modelName == Models.FIRST_STAGE) {
+                        reinforceEvents = firstStageProcessor.reinforceEvents;
+                    } else {
+                        // getDataForReinforcing
+                        for (Amr amr : reinforceAmrs) {
+                            List<Datum<String, String>> datumList =
+                                new ArrayList<>();
+                            Map<Vertex, String> map;
+                            switch (modelName) {
+                                case POS:
+                                    map = amr.partialTransitionFunction.pos;
+                                    break;
+                                case TENSE:
+                                    map = amr.partialTransitionFunction.tense;
+                                    break;
+                                case VOICE:
+                                    map = amr.partialTransitionFunction.voice;
+                                    break;
+                                case DENOM:
+                                    map = amr.partialTransitionFunction
+                                              .denominator;
+                                    // TODO explain
+                                    for (Map.Entry<Vertex, String> entry :
+                                        map.entrySet()) {
+                                        if (entry.getValue().equals("")) {
+                                            entry.setValue("-");
+                                        }
+                                    }
+                                    break;
+                                case NUMBER:
+                                    map = amr.partialTransitionFunction.number;
+                                    break;
+                                default:
+                                    throw new AssertionError(
+                                        "model not applicable for reinforcement with sampling");
+                            }
+                            for (Map.Entry<Vertex, String> entry :
+                                map.entrySet()) {
+                                datumList.addAll(model.toDatumList(
+                                    amr, entry.getKey(), true));
+                            }
+                            reinforceEvents.add(datumList);
+                        }
+                    }
                 }
+                model.reinforce(
+                    reinforceAmrs, reinforceEvents, rewards, learningRate);
                 for (int k = 0; k < model.classifier.labelIndex().size(); k++) {
+                    if (k == 5) {
+                        System.out.printf("weights[38][...%d]\n",
+                            model.classifier.labelIndex().size());
+                        break;
+                    }
                     System.out.printf("weights[38][%d] % 02.7f (% 02.9f)\n", k,
                         weights[38][k], weights[38][k] - oldWeights[38][k]);
                 }
@@ -689,6 +769,7 @@ public class AmrMain {
             index++;
         }
         if (perc < 100) {
+            perc = 100;
             System.out.printf("%d%%\n", perc);
         }
 
