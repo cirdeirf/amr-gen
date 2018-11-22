@@ -347,7 +347,12 @@ public class DefaultRealizer {
             }
             if (lab.equals(":value")) {
                 if (inEdge.getFrom().getInstance().equals("ordinal-entity")) {
-                    int val = Integer.valueOf(inst);
+                    int val;
+                    if (v.getInstance().equals("\"-1\"")) {
+                        val = -1;
+                    } else {
+                        val = Integer.valueOf(inst);
+                    }
                     if (val == 1)
                         inst = "first";
                     if (val == 2)
@@ -360,6 +365,8 @@ public class DefaultRealizer {
                         inst = "fifth";
                     if (val == 6)
                         inst = "sixth";
+                    if (val == -1)
+                        inst = "last";
                 }
             }
         }
