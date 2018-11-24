@@ -26,7 +26,9 @@ public class FirstStageProcessor {
     // the maximum entropy model for the first stage
     private FirstStageMaxentModel maxentModel;
 
-    // TODO docu: no reasonable way to get events after generation
+    //  the list of events that are created during generation for each AMR
+    // (there did not seem to be another reasonable way to store and access
+    // these events)
     public List<List<Datum<String, String>>> reinforceEvents;
 
     // the AMR graph that is currently being processed
@@ -89,7 +91,15 @@ public class FirstStageProcessor {
         Debugger.println("done training first stage");
     }
 
-    // TODO description
+    /**
+     * Helper function for the reinforcement process.
+     * Basically does the same as function {@link
+     * #getDataForTrainingFirstStage(List)} except that it keeps track what
+     * event list belongs to which amr.
+     * @param reinforceAmrs the list of AMRs for whose event lists are needed.
+     * @return a list of event lists, s.t. a list of events can be attributed to
+     * a specifig AMR from reinforceAmrs.
+     */
     public List<List<Datum<String, String>>> getDataForReinforcing(
         List<Amr> reinforceAmrs) {
         List<List<Datum<String, String>>> ret =
@@ -171,9 +181,12 @@ public class FirstStageProcessor {
      * FirstStageProcessor#maxentModel}. This function is used during testing;
      * it implements the algorithm {@code generateGreedy_restr} as defined in
      * the thesis.
+     * Furthermore this function is slightly modified to allow for keeping track
+     * of created events during the generation process.
      * @param amrs the AMR graphs to process
      */
     public void processFirstStage(List<Amr> amrs) {
+        // keep track of the created events during generation
         reinforceEvents = new ArrayList<List<Datum<String, String>>>();
         for (Amr amr : amrs) {
             reinforceEvents.add(processFirstStage(amr));
@@ -186,11 +199,13 @@ public class FirstStageProcessor {
      * FirstStageProcessor#maxentModel}. This function is used during testing;
      * it implements the algorithm {@code generateGreedy_restr} as defined in
      * the thesis.
+     * Furthermore this function is slightly modified to allow for keeping track
+     * of created events during the generation process.
      * @param amr the AMR graph to process
-     * TODO add return value
+     * @return a list of events that have been created during generation
      */
     public List<Datum<String, String>> processFirstStage(Amr amr) {
-        // TODO comment
+        // event list
         List<Datum<String, String>> ret = new ArrayList<>();
         this.amr = amr;
         buffer = amr.dag.getVerticesBottomUp();
@@ -224,6 +239,8 @@ public class FirstStageProcessor {
 
             // apply the best found action
             if (!bestTransition.isEmpty()) {
+                // add newly created event (datum) since the original did not
+                // contain the applied (best) transition
                 ret.add(new BasicDatum(
                     datumList.get(0).asFeatures(), bestTransition));
                 applyTransition(current, bestTransition);

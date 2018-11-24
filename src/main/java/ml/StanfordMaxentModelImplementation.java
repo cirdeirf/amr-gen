@@ -140,13 +140,6 @@ public abstract class StanfordMaxentModelImplementation {
             }
         } else {
             loadModelFromFile(filename);
-            // TODO remove
-            System.out.printf("%d", classifier.featureIndex().size());
-            if (filename.equals("models/first_stage.model")) {
-                System.out.println("");
-                System.out.println(classifier.toString("HighWeight", 10));
-                System.out.println(classifier.labels());
-            }
         }
         System.out.println("");
     }
@@ -261,7 +254,13 @@ public abstract class StanfordMaxentModelImplementation {
         return factory.getSigma();
     }
 
-    // TODO add description (untestet)
+    /**
+     * Gather all events created during processing a list of AMRs and keep track
+     * which event has been generated for which AMR.
+     * @param reinforceAmrs
+     * @return a list of list of events/datums, i.e., for each AMR the event for
+     * each vertex that is visited during processing
+     */
     public List<List<Datum<String, String>>> getDataForReinforcing(
         List<Amr> reinforceAmrs) {
         List<List<Datum<String, String>>> ret =
@@ -392,42 +391,76 @@ public abstract class StanfordMaxentModelImplementation {
             "applyModification(Amr, Vertex, String) must be overwritten in order for test(Amr,Boolean) to work");
     }
 
-    // TODO add documentation
+    /**
+     * Test the model as is done during training to determine the quality of the
+     * model.
+     * Function {@link #test(List, boolean)} would have been used if it did not
+     * unexplicably change the outcome of the generator.
+     * @param amrs the list of AMRs on which the model is to be tested, normally
+     * these are taken from the development set
+     * @return a score representing the model's quality
+     */
+    public double getScore(List<Amr> amrs) {
+        Function<List<Amr>, LossEvaluator> testFunction = this ::test;
+        return testFunction.apply(amrs).total;
+    }
+
+    /**
+     * Update the models feature weights by using reinforcement learning as
+     * described in "Tackling Error Propagation through Reinforcement Learning:
+     * A Case of Greedy Dependency Parsing" (Lê, Fokkens 2017).
+     * This function calculates the gradient as is described in equation (4) of
+     * aforementioned paper.
+     * @param amrs the batch of AMRs taken from the training corpus with which
+     * the update delta of the feature weights is calculated.
+     * @param events list of events for each AMR, indicating the applied
+     * transition and active features.
+     * @param learningRate discount factor (changed if results improve) that
+     * affects the update delta of the feature weights
+     * @param rewards list of BLEU scores for each AMR for weighing a transition
+     * sequence (in case it is not the gold transition sequence).
+     */
     public void reinforce(List<Amr> amrs,
         List<List<Datum<String, String>>> events, List<Double> rewards,
-        double learningRate) {
+        double learningRate, List<Amr> devAmrs) {
         Index<String> featureIndex = classifier.featureIndex();
         Index<String> labelIndex = classifier.labelIndex();
         double[][] weights = classifier.weights();
         double[][] delta = new double[featureIndex.size()][labelIndex.size()];
 
         List<Datum<String, String>> datumList = new ArrayList<>();
-        // // \sum_{x, y} -- x: context/(amr, v), y: result/transition
+
         // \sum_{x, y} -- x = amr, y = sentence
+        // these formula fragments refer to the calculated gradient (mentioned
+        // in report)
+        // sum up the feature weight updates for all AMRs in the batch
         int l = 0;
-        int dec = (int) ((double) amrs.size() / 10) + 1;
         int perc = 0;
         for (Amr amr : amrs) {
-            // System.out.printf("%-5d %s\n", l, Arrays.toString(amr.sentence));
-            if (l % dec == 0) {
+            // print progress
+            if (amrs.indexOf(amr) % (int) ((double) amrs.size() / 9 + 1) == 0) {
                 perc += 10;
-                System.out.printf("%d%%\n", perc);
+                Debugger.println(perc + "%");
             }
-            double[][] amrDelta =
-                new double[featureIndex.size()][labelIndex.size()];
+
             // \sum_{a_{1:m}}
-            // only one sequence (oracle)
-            // datumList: a_{1:m}
+            // only one sequence is used (either given by the oracle or by the
+            // model predictions)
+            // get all events for the current amr
+            // each datum's label represents an action taken
             datumList = events.get(l);
+
+            // sometimes there are no events available for an amr
             if (datumList.isEmpty()) {
                 l++;
                 continue;
             }
 
-            // (r(y) - b(y)) *
-            // missing (unnecessary for oracle sequence)
+            double[][] amrDelta =
+                new double[featureIndex.size()][labelIndex.size()];
 
             // (\prod_{i=1}^{m} f_{NN}(s_i, a_i; \Theta)) *
+            // calculate the likelihood of the transition sequence
             double sequenceProbability = 1;
             for (Datum<String, String> d : datumList) {
                 Counter<String> scores = classifier.probabilityOf(d);
@@ -435,21 +468,24 @@ public abstract class StanfordMaxentModelImplementation {
             }
 
             // \sum_{i=1}^{m}(
+            // sum up the feature weight updates for all actions in a sequence
             for (Datum<String, String> d : datumList) {
+                // get all active features for the current event
                 List<Integer> activeFeatures = new ArrayList<>();
                 for (String feature : d.asFeatures()) {
-                    // some feature seem to be unknown
+                    // some features seem to be unknown
                     if (featureIndex.indexOf(feature) != -1) {
                         activeFeatures.add(featureIndex.indexOf(feature));
                     }
                 }
 
                 // \sum_{a'}(f_{NN}(s_i, a'; \Theta) * f_j(s_i, a'))
-                // maybe f_{j, a} - score * f_{j, a} does the trick as well
+                // determine the actions probability (probably overcomplicated
+                // as for all a !=i nothing happens)
                 Counter<String> scores = classifier.probabilityOf(d);
                 double[][] actionProbability =
                     new double[featureIndex.size()][labelIndex.size()];
-                // for each a'
+                // labelIndex.size() equals number of actions for this model
                 for (int i = 0; i < labelIndex.size(); i++) {
                     for (int j : activeFeatures) {
                         for (int a = 0; a < labelIndex.size(); a++) {
@@ -469,13 +505,22 @@ public abstract class StanfordMaxentModelImplementation {
                     }
                 }
             }
+
+            // calculate the delta for each feature for this amr/sentence pair
             for (int j = 0; j < featureIndex.size(); j++) {
                 for (int a = 0; a < labelIndex.size(); a++) {
-                    delta[j][a] += rewards.get(l) * amrDelta[j][a];
+                    delta[j][a] +=
+                        rewards.get(l) * sequenceProbability * amrDelta[j][a];
                 }
             }
             l++;
         }
+        if (perc < 100)
+            Debugger.println("100%");
+
+        // discount the calculated delta according to the learning rate and the
+        // batch size (update size would get to high otherwise)
+        // and update each feature weight
         for (int i = 0; i < weights.length; i++) {
             for (int j = 0; j < weights[0].length; j++) {
                 weights[i][j] +=

@@ -149,29 +149,15 @@ public class AmrMain {
             jCommander.usage();
         }
 
+        // trains all maximum entropy models specified here
         else if (gen.train) {
-            // optimizeHyperparams();
-            // setUp(Arrays.asList(Models.POS, Models.DENOM, Models.NUMBER,
-            //           Models.TENSE, Models.VOICE),
-            //     true);
             setUp(Arrays.asList(Models.FIRST_STAGE), true);
-            // setUp(Arrays.asList(Models.REALIZE), false);
-            // setUp(Arrays.asList(Models.REORDER, Models.REORDER_RIGHT,
-            //           Models.REORDER_LEFT, Models.REALIZE),
-            //     false);
-            // // true
-            // pos, denom, number, tense, voice
-            // insert_others, insert_args, insert_child
-            // first_stage
-            // // false
-            // reorder, reorder_right, reorder_left, realize
         }
 
-        // TODO not applicable to realize and no random for ordering/insert
+        // improve feature weights of given models using reinforcement learning
         else if (gen.reinforce) {
             setUp();
-            // 0
-            reinforce(Arrays.asList(Models.FIRST_STAGE), 0.1, 500, true);
+            reinforce(Arrays.asList(Models.FIRST_STAGE), 0.8, 500, true);
         }
 
         // generate sentences from a list of AMR graphs
@@ -280,7 +266,23 @@ public class AmrMain {
         }
     }
 
-    // TODO documentation
+    /**
+     * Improve the given models using reinforcement learning.
+     * Though the improved feature weight calculation and update process happens
+     * in {@link StanfordMaxentModelImplementation#reinforce(List, List, List,
+     * double} the process is organised from here. This is due to the necessity
+     * of getting events (features/label) from the generation process and of
+     * evaluating the modified models which is easiest done in this main class.
+     * @param modelsToReinforce a list of maximum entropy models which should.
+     * be improved by updating the feature weights with reinforcement learning.
+     * @param learningRate the rate at which each update step is discounted
+     * (halved every time the score gets worse).
+     * @param batchSize number of randomly sampled amrs from the training corpus
+     * whose processing provides the events for the feature updates.
+     * @param useOracleSequence whether to process the amrs according to the
+     * oracle transition sequence or according to a sequence provided by
+     * querying the current models.
+     */
     private void reinforce(List<Models> modelsToReinforce, double learningRate,
         int batchSize, boolean useOracleSequence)
         throws IOException, JWNLException {
@@ -291,19 +293,25 @@ public class AmrMain {
         List<Amr> devAmrs;
         List<String> generatedSentences;
         String filename;
+
         double startLearningRate = learningRate;
+        // remember initial value to show improvement at the end
         double startScore;
         double bestScore = 0;
         // bestScore = 0.274058436;
         startScore = bestScore;
+        // for some models the built in test function fails
+        boolean alternativeTest = false;
 
-        StanfordMaxentModelImplementation model;
+        // iterate over all model that are to be improved
         for (Models modelName : modelsToReinforce) {
+            // reset learning rate
             learningRate = startLearningRate;
             Debugger.println("----------------------------------");
             Debugger.println("Model " + modelName);
 
             trainingAmrs = loadAmrGraphs(PathList.TRAINING_DIR, false);
+            // needed for correct event extraction
             BigraphAlignmentBuilder builder = new BigraphAlignmentBuilder();
             for (Amr amr : trainingAmrs) {
                 if (amr.dependencyTree != null) {
@@ -311,6 +319,8 @@ public class AmrMain {
                 }
             }
 
+            // determine model to improve based on Models enum
+            StanfordMaxentModelImplementation model;
             switch (modelName) {
                 case POS:
                     model = maxentModels.posMaxentModel;
@@ -334,7 +344,6 @@ public class AmrMain {
                     break;
                 case FIRST_STAGE:
                     model = maxentModels.firstStageMaxentModel;
-                    // TODO check why this is responsible for better scores
                     firstStageProcessor.getDataForTrainingFirstStage(
                         trainingAmrs);
                     filename = PathList.FIRST_STAGE_MAXENT_PATH;
@@ -352,8 +361,8 @@ public class AmrMain {
                     filename = PathList.ARG_INSERTION_MAXENT_PATH;
                     break;
                 case REORDER:
-                    // needed for these models
-                    // TODO maybe not for !useOracleSequence
+                    // according to setUp(), these models require
+                    // firstStageProcessing beforehand
                     firstStageProcessor.processFirstStage(trainingAmrs);
                     model = maxentModels.parentChildReorderMaxentModel;
                     filename = PathList.REORDER_MAXENT_PATH;
@@ -368,56 +377,72 @@ public class AmrMain {
                     model = maxentModels.rightMaxEnt;
                     filename = PathList.RIGHT_REORDER_MAXENT_PATH;
                     break;
-                // TODO reinforce for OpenNlpMaxentModelImplementation
-                // case REALIZE:
-                //     model = maxentModels.realizeMaxentModel;
-                //     filename = PathList.REALIZE_MAXENT_PATH;
-                //     break;
+                case REALIZE:
+                    throw new AssertionError(
+                        "reinforcement learning could not be implemented for"
+                        + "the OpenNlpMaxentModelImplementation.");
                 default:
                     throw new AssertionError(
                         "no model to reinforce has been given.");
             }
+
+            // this array will be modified during the feature update process
             double[][] weights = model.classifier.weights();
+
+            // repeat the update process for several iterations (adjusting the
+            // learning rate depending on its success)
             for (int i = 1; i <= 9; i++) {
                 Debugger.println("----------------------------------");
                 Debugger.println("Reinforce iteration #" + i);
                 Debugger.println("(" + modelName + ", "
                     + "learningRate: " + learningRate + ")");
                 Debugger.println("----------------------------------");
+
+                // determine the current best score on the development set
                 if (bestScore == 0) {
-                    // TODO save best score so far in meta file
                     Debugger.println("determine current best score");
                     devAmrs = loadAmrGraphs(PathList.DEVELOPMENT_DIR, true);
-                    generatedSentences = generate(devAmrs, true, true);
-                    bestScore = getBleu(devAmrs, generatedSentences);
+                    bestScore = model.getScore(devAmrs);
+                    // for some models the built in test function fails
+                    if (Double.isNaN(bestScore) || bestScore == 1.0)
+                        alternativeTest = true;
+                    if (alternativeTest) {
+                        generatedSentences = generate(devAmrs, true, true);
+                        bestScore = getBleu(devAmrs, generatedSentences);
+                    }
                     startScore = bestScore;
                     Debugger.println("(current best = " + bestScore + ")");
                 }
+
+                // keep the old weights in case the new weights yield a worse
+                // score
                 double[][] oldWeights = new double[weights.length][];
                 for (int k = 0; k < weights.length; k++) {
                     oldWeights[k] =
                         Arrays.copyOf(weights[k], weights[k].length);
                 }
-                // for (int k = 0; k < model.classifier.labelIndex().size();
-                // k++) {
-                //     System.out.printf(
-                //         "weights[38][%d] % 02.7f\n", k, weights[38][k]);
-                // }
 
+                // reload the training amrs after they have been processed
                 if (!useOracleSequence) {
                     trainingAmrs = loadAmrGraphs(PathList.TRAINING_DIR, false);
                 }
+
+                // gather a batch of amrs
                 List<Amr> reinforceAmrs = new ArrayList<>();
+                // use same random numbers for each iteration in order to make
+                // results reproducible
                 Collections.shuffle(trainingAmrs, new Random(i));
                 for (int j = 0; j < batchSize; j++) {
                     reinforceAmrs.add(trainingAmrs.get(j));
                 }
 
-                // TODO generalise getDataForReinforcing
                 Debugger.println("starting gradient step");
+
+                // retrieve events for reinforcing (and calculate rewards)
                 List<List<Datum<String, String>>> reinforceEvents =
                     new ArrayList<List<Datum<String, String>>>();
                 List<Double> rewards;
+                // process reinforceAmrs according to the oracle algorithm
                 if (useOracleSequence) {
                     if (modelName == Models.FIRST_STAGE) {
                         reinforceEvents =
@@ -427,9 +452,14 @@ public class AmrMain {
                         reinforceEvents =
                             model.getDataForReinforcing(reinforceAmrs);
                     }
+                    // theoretically all sentences produced by the oracle
+                    // sequence should have a BLEU score of 1
                     rewards = new ArrayList<>(
                         Collections.nCopies(reinforceAmrs.size(), 1.0));
-                } else {
+                }
+                // process reinforceAmrs according to the current models
+                else {
+                    // generate sentences and calculate BLEU scores (rewards)
                     List<String> rewardSentences =
                         generate(reinforceAmrs, true, true);
                     rewards = new ArrayList<>();
@@ -438,10 +468,14 @@ public class AmrMain {
                             Collections.singletonList(reinforceAmrs.get(i)),
                             Collections.singletonList(rewardSentences.get(i))));
                     }
+                    // access the events generated during generation
                     if (modelName == Models.FIRST_STAGE) {
                         reinforceEvents = firstStageProcessor.reinforceEvents;
-                    } else {
-                        // getDataForReinforcing
+                    }
+                    // for models used during second stage processing these
+                    // could only be reconstructed from the
+                    // partialTransitionFunction of the chosen prediction
+                    else {
                         for (Amr amr : reinforceAmrs) {
                             List<Datum<String, String>> datumList =
                                 new ArrayList<>();
@@ -459,7 +493,8 @@ public class AmrMain {
                                 case DENOM:
                                     map = amr.partialTransitionFunction
                                               .denominator;
-                                    // TODO explain
+                                    // the denominator is replaced during second
+                                    // stage processing
                                     for (Map.Entry<Vertex, String> entry :
                                         map.entrySet()) {
                                         if (entry.getValue().equals("")) {
@@ -472,8 +507,9 @@ public class AmrMain {
                                     break;
                                 default:
                                     throw new AssertionError(
-                                        "model not applicable for reinforcement with sampling");
+                                        "model not applicable for reinforcement with sampling.");
                             }
+                            // reconstruct event used during generation
                             for (Map.Entry<Vertex, String> entry :
                                 map.entrySet()) {
                                 datumList.addAll(model.toDatumList(
@@ -483,39 +519,41 @@ public class AmrMain {
                         }
                     }
                 }
-                model.reinforce(
-                    reinforceAmrs, reinforceEvents, rewards, learningRate);
-                for (int k = 0; k < model.classifier.labelIndex().size(); k++) {
-                    if (k == 5) {
-                        System.out.printf("weights[38][...%d]\n",
-                            model.classifier.labelIndex().size());
-                        break;
-                    }
-                    System.out.printf("weights[38][%d] % 02.7f (% 02.9f)\n", k,
-                        weights[38][k], weights[38][k] - oldWeights[38][k]);
-                }
+
+                devAmrs = loadAmrGraphs(PathList.DEVELOPMENT_DIR, true);
+                // let the model calculate new feature weights and update its
+                // classifier
+                model.reinforce(reinforceAmrs, reinforceEvents, rewards,
+                    learningRate, devAmrs);
+
                 Debugger.println("finished gradient step");
 
-                // evaluate
+                // get the score on the development set to decide whether to
+                // keep the new weights
                 devAmrs = loadAmrGraphs(PathList.DEVELOPMENT_DIR, true);
-                generatedSentences = generate(devAmrs, true, true);
-                double score = getBleu(devAmrs, generatedSentences);
+                double score;
+                if (alternativeTest) {
+                    generatedSentences = generate(devAmrs, true, true);
+                    score = getBleu(devAmrs, generatedSentences);
+                } else {
+                    score = model.getScore(devAmrs);
+                }
                 Debugger.println(
-                    "BLEU = " + score + " (current best = " + bestScore + ")");
-                if (score <= bestScore) {
-                    // weights = oldWeights
+                    "score = " + score + " (current best = " + bestScore + ")");
+                // halve learning rate and revert to old weights
+                if (score < bestScore) {
                     for (int k = 0; k < weights.length; k++) {
                         weights[k] =
                             Arrays.copyOf(oldWeights[k], oldWeights[k].length);
                     }
                     learningRate *= 0.5;
-                } else {
+                }
+                // keep learning rate and save new (better) model
+                else {
                     bestScore = score;
                     model.saveModelToFile(filename);
                 }
             }
-            // TODO at the end of each model reinforcement or after each best?
-            // model.saveModelToFile(filename);
         }
         Debugger.println(
             "finished reinforcing (" + startScore + " -> " + bestScore + ")");
@@ -750,28 +788,18 @@ public class AmrMain {
         Debugger.println("starting second-stage processing of " + amrs.size()
             + " AMR graphs...");
 
-        // TODO more precise percentage (actually quits if reached 100%)
-        int index = 1;
-        // long timeStep;
-        int dec = (int) ((double) amrs.size() / 10) + 1;
         int perc = 0;
         for (Amr amr : amrs) {
-            // timeStep = System.nanoTime();
-            // System.out.printf("%4d / %d\n", index, amrs.size());
-            if (index % dec == 0) {
+            // System.out.println(amrs.indexOf(amr));
+            if (amrs.indexOf(amr) % (int) ((double) amrs.size() / 9 + 1) == 0) {
                 perc += 10;
-                System.out.printf("%d%%\n", perc);
+                Debugger.println(perc + "%");
             }
             generatedSentences.add(
                 secondStageProcessor.getBestRealizationAsString(amr));
-            // System.out.printf(" ...(%f)\n",
-            //     (double) (System.nanoTime() - timeStep) / (1000000000.0));
-            index++;
         }
-        if (perc < 100) {
-            perc = 100;
-            System.out.printf("%d%%\n", perc);
-        }
+        if (perc < 100)
+            Debugger.println("100%");
 
         Debugger.println("finished second-stage processing of " + amrs.size()
             + " AMR graphs.");
