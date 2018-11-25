@@ -19,6 +19,8 @@ public class GoldTransitions {
     public static final String SWAP = "_swap";
     public static final String KEEP = "_realize";
     public static final String MERGE = "_merge";
+    // new transition, introduced in an attempt to generalise/extend MERGE
+    public static final String MERGE_SIBLING = "_mergeSibling";
 
     // possible events for the <_* maximum entropy model (see Eq. 19,
     // Section 4.2.1 Modeling)
@@ -63,6 +65,13 @@ public class GoldTransitions {
         boolean merge = mergeResult != null;
         if (merge)
             return MERGE;
+
+        // check whether a MERGE_SIBLING transition is required
+        // give priority to MERGE and check for possible sibling merges after
+        List<String> mergeSiblingResult = getGoldMergeSibling(amr, vertex);
+        boolean mergeSibling = mergeSiblingResult != null;
+        if (mergeSibling)
+            return MERGE_SIBLING;
 
         // check whether a SWAP transition is required
         boolean swap = getGoldSwap(amr, vertex);
@@ -131,6 +140,124 @@ public class GoldTransitions {
         // if the alignments have no common element, no MERGE transition is
         // required
         return null;
+    }
+
+    /**
+     * This function returns either the gold MERGE-SIBLING transition to be
+     * applied to a vertex, or null if no MERGE-SIBLING transition is required.
+     * @param amr the AMR graph to which the vertex belongs
+     * @param vertex the current vertex to be checked
+     * @return a tab-separated string containing the concept and POS of the gold
+     * sibling merge, if a MERGE-SIBLING transition is required, and {@code
+     * null} otherwise
+     */
+    public static List<String> getGoldMergeSibling(Amr amr, Vertex vertex) {
+        // if a vertex has no parent, no MERGE-SIBLING transition can be
+        // performed
+        if (vertex.getIncomingEdges().isEmpty())
+            return null;
+
+        // get the vertex' parent
+        Vertex parent = vertex.getIncomingEdges().get(0).getFrom();
+        // and all sibling vertices (if there are any)
+        List<Vertex> siblingVertices = new ArrayList<>();
+        for (Edge e : parent.getOutgoingEdges()) {
+            // omit the parent's instanceEdge
+            if (e == parent.getInstanceEdge()) {
+                continue;
+            }
+            siblingVertices.add(e.getTo());
+        }
+        // omit the vertex itself
+        siblingVertices.remove(vertex);
+
+        // if there are no siblings there can be no MERGE-SIBLING transition
+        // additionally, merging dates is disallowed since {@link
+        // DefaultRealizer:getDefaultRealizations(Vertex, Map)} already handles
+        // these
+        if (siblingVertices.isEmpty()
+            || parent.getInstance().equals("date-entity"))
+            return null;
+
+        Edge thisInstance = vertex.getInstanceEdge();
+
+        // get the alignment of all siblings to determine if any of these may
+        // have a common alignment with the current vertex
+        Set<Integer> combinedSiblingAlignment = new HashSet<>();
+        Iterator<Vertex> vIterator = siblingVertices.iterator();
+        while (vIterator.hasNext()) {
+            Vertex v = vIterator.next();
+            // remove all vertices that are not aligned at all
+            if (!amr.alignment.containsKey(v.getInstanceEdge())) {
+                vIterator.remove();
+                continue;
+            }
+            combinedSiblingAlignment.addAll(
+                amr.alignment.get(v.getInstanceEdge()));
+        }
+
+        // in case the current vertex is not aligned or none of its siblings is,
+        // there cannot be any sibling merge
+        if (!amr.alignment.containsKey(thisInstance)
+            || combinedSiblingAlignment.isEmpty())
+            return null;
+
+        Set<Integer> thisAlignment = amr.alignment.get(thisInstance);
+
+        // if the alignments have no common element, no MERGE-SIBLING transition
+        // is required
+        if (Collections.disjoint(thisAlignment, combinedSiblingAlignment))
+            return null;
+
+        // get the combined alignemt of the current vertex and a sibling
+        // (only the first sibling is considered as in almost all cases there is
+        // either only one available sibling for merge or the available siblings
+        // all share the same instance which would result in the same merge)
+        Set<Integer> siblingAlignment =
+            amr.alignment.get(siblingVertices.get(0).getInstanceEdge());
+        Set<Integer> combinedAlignment = new HashSet<>();
+        combinedAlignment.addAll(thisAlignment);
+        combinedAlignment.addAll(siblingAlignment);
+
+        // if the combined alignment of both vertices is not contiguous, there
+        // is no way of assigning a meaningful merged concept to them
+        if (!StaticHelper.isContiguous(combinedAlignment))
+            return null;
+
+        // sort the alignment to extract the substring that is to be the
+        // resulting merge
+        List<Integer> sortedAlignment = new ArrayList<>(combinedAlignment);
+        Collections.sort(sortedAlignment);
+
+        StringBuilder resultBuilder = new StringBuilder();
+        String pos = PosHelper.POS_ANY;
+
+        // construct the resulting merge
+        for (int i : sortedAlignment) {
+            resultBuilder.append(amr.sentence[i]);
+            resultBuilder.append(" ");
+            if (sortedAlignment.size() == 1) {
+                pos = amr.pos[i];
+            }
+        }
+
+        List<String> siblingsToMerge = new ArrayList<>();
+        siblingsToMerge.add(siblingVertices.get(0).getInstance());
+        siblingsToMerge.add(vertex.getInstance());
+        // sort the siblings to be sure same merge sibling maps are recognized
+        // as the same
+        Collections.sort(siblingsToMerge, String.CASE_INSENSITIVE_ORDER);
+
+        // construct the key
+        String key = "";
+        for (String s : siblingsToMerge) {
+            key += s + "\t";
+        }
+        key = key.substring(0, key.length() - 1);
+
+        String word = resultBuilder.toString().toLowerCase().trim();
+        String mappedPos = PosHelper.mapPos(pos, false);
+        return Arrays.asList(key, word + "\t" + mappedPos);
     }
 
     /**

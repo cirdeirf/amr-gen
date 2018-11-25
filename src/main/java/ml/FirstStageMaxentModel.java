@@ -21,9 +21,15 @@ public class FirstStageMaxentModel extends StanfordMaxentModelImplementation {
     // from the training corpus
     public final Map<String, String> bestMerges;
 
+    // a map containing for each pair of sibling vertices their best merge,
+    // extracted from the training corpus
+    public final Map<String, String> bestSiblingMerges;
+
     public FirstStageMaxentModel() throws IOException {
         super();
         this.bestMerges = StaticHelper.mapFromFile(PathList.MERGEMAP_PATH);
+        this.bestSiblingMerges =
+            StaticHelper.mapFromFile(PathList.MERGESIBLINGMAP_PATH);
     }
 
     @Override
@@ -144,17 +150,62 @@ public class FirstStageMaxentModel extends StanfordMaxentModelImplementation {
                 .map(e -> e.getLabel() + " " + e.getTo().getInstance())
                 .collect(Collectors.toList());
 
+        List<Vertex> siblingVertices = new ArrayList<>();
         if (from != null) {
             parentInstance = from.getInstance();
             grandparentInstance = from.getIncomingEdges().isEmpty()
                 ? ":ROOT"
                 : from.getIncomingEdges().get(0).getFrom().getInstance();
+            // gather all sibling vertices
+            for (Edge e : from.getOutgoingEdges()) {
+                if (e == from.getInstanceEdge())
+                    continue;
+                siblingVertices.add(e.getTo());
+            }
+            siblingVertices.remove(vertex);
         }
 
         boolean mergeable = from != null;
         if (mergeable) {
             mergeable =
                 bestMerges.containsKey(parentInstance + "\t" + instance);
+        }
+
+        String mergeSiblingInstance = "NONE";
+        String mergeSiblingInLabel = "NONE";
+        // the resulting merge
+        String siblingMerge = "NONE";
+        boolean mergeableSibling = !mergeable && !siblingVertices.isEmpty();
+        if (mergeableSibling) {
+            List<String> siblingsToMerge = new ArrayList<>();
+            // go through all siblings and check wether one of them is mergeable
+            // with the current vertex
+            for (Vertex v : siblingVertices) {
+                siblingsToMerge.clear();
+                siblingsToMerge.add(v.getInstance());
+                siblingsToMerge.add(vertex.getInstance());
+
+                // sort the instances to be merged
+                // (the map only contains sorted keys)
+                Collections.sort(
+                    siblingsToMerge, String.CASE_INSENSITIVE_ORDER);
+                String key = "";
+                for (String s : siblingsToMerge) {
+                    key += s + "\t";
+                }
+                key = key.substring(0, key.length() - 1);
+
+                mergeableSibling = bestSiblingMerges.containsKey(key);
+                if (mergeableSibling) {
+                    mergeSiblingInstance = v.getInstance();
+                    mergeSiblingInLabel =
+                        v.getIncomingEdges().get(0).getLabel();
+                    siblingMerge = bestSiblingMerges.get(key).split("\t")[0];
+                    // continue if there is at least one MERGE-SIBLING
+                    // transition is possible
+                    break;
+                }
+            }
         }
 
         List<IndicatorFeature> features = new ArrayList<>();
@@ -204,6 +255,10 @@ public class FirstStageMaxentModel extends StanfordMaxentModelImplementation {
         features.add(new StringFeature(
             "parentInstance-instance", parentInstance + instance));
         features.add(new StringFeature("mergeable", mergeable));
+
+        features.add(new StringFeature("mergeableSibling", mergeableSibling));
+        features.add(new StringFeature("never",
+            (instance.equals("ever") && mergeSiblingInstance.equals("-"))));
 
         features.add(new StringFeature("parentInstance", parentInstance));
         features.add(new StringFeature("outEmpty", outStrings.isEmpty()));

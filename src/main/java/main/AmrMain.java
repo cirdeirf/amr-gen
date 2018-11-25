@@ -42,17 +42,17 @@ public class AmrMain {
     private boolean setUp = false;
 
     public static void main(String[] args) throws IOException, JWNLException {
-        args = new String[] {"-i", "in1.txt", "-o", "out1.txt"};
+        // args = new String[] {"-i", "in1.txt", "-o", "out1.txt"};
 
         Amr.setUp();
         AmrMain main = new AmrMain(args);
 
-        System.in.read();
-        main.demo1();
-        System.in.read();
-        main.demo2();
-        System.in.read();
-        main.demo3();
+        // System.in.read();
+        // main.demo1();
+        // System.in.read();
+        // main.demo2();
+        // System.in.read();
+        // main.demo3();
     }
 
     // generates a sentence from the "the developer wants to sleep" AMR graph
@@ -147,6 +147,26 @@ public class AmrMain {
         // show help for the command line interface
         if (gen.help) {
             jCommander.usage();
+        }
+
+        // trains all maximum entropy models specified here
+        else if (gen.train) {
+            setUp(Arrays.asList(Models.FIRST_STAGE), true);
+        }
+
+        // extract map mapping each mergeable sibling pair to the corresponding
+        // merged vertex observed most often
+        else if (gen.mergemap) {
+            setUp();
+            List<Amr> amrs = loadAmrGraphs(PathList.TRAINING_DIR, false);
+
+            Map<String, String> mergeMap =
+                StaticHelper.getMergeSiblingMap(amrs);
+            List<String> mergeList = new ArrayList<>();
+            for (Map.Entry<String, String> entry : mergeMap.entrySet()) {
+                mergeList.add(entry.toString().replace("\t", "\\t"));
+            }
+            Files.write(Paths.get(PathList.MERGESIBLINGMAP_PATH), mergeList);
         }
 
         // generate sentences from a list of AMR graphs
@@ -483,10 +503,17 @@ public class AmrMain {
         Debugger.println("starting second-stage processing of " + amrs.size()
             + " AMR graphs...");
 
+        int perc = 0;
         for (Amr amr : amrs) {
+            if (amrs.indexOf(amr) % (int) ((double) amrs.size() / 9 + 1) == 0) {
+                perc += 10;
+                Debugger.println(perc + "%");
+            }
             generatedSentences.add(
                 secondStageProcessor.getBestRealizationAsString(amr));
         }
+        if (perc < 100)
+            Debugger.println("100%");
 
         Debugger.println("finished second-stage processing of " + amrs.size()
             + " AMR graphs.");
@@ -852,4 +879,14 @@ class CommandGenerate {
             "Show pairs of (reference realization, generated sentence) in the console when the generator is finished. "
             + "This is only possible if the AMR graphs are stored with tokenized reference realizations in the input file.")
     Boolean printOutputToStdout = false;
+
+    @Parameter(names = {"--train", "-t"},
+        description = "Train given models (specified in AmrMain constructor).")
+    Boolean train = false;
+
+    @Parameter(names = {"--mergemap", "-m"},
+        description = "Extract a map mapping each mergeable sibling pair to "
+            + "the corresponding merged vertex observed most often from "
+            + "the training set.")
+    Boolean mergemap = false;
 }

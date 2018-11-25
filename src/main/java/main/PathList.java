@@ -219,6 +219,13 @@ public class PathList {
     public static final String MERGEMAP_PATH = BASEPATH + "res/mergemap.txt";
 
     /**
+     * path to a map containing (sibling, sibling) pairs and the result of
+     * merging them
+     */
+    public static final String MERGESIBLINGMAP_PATH =
+        BASEPATH + "res/mergesiblingmap.txt";
+
+    /**
      * paths to a map mapping all realizations for named entities to the number
      * of times they have been observed in the training corpus
      */

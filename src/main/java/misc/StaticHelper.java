@@ -313,6 +313,59 @@ public class StaticHelper {
     }
 
     /**
+     * Extracts from a corpus of AMR graphs a map mapping each mergeable
+     * (sibling, sibling) pair (TAB separated) to the corresponding merged
+     * vertex observed most often.
+     * This provides almost the same functionality as {@link #getMergeMap(List)}
+     * except that we do not know what two siblings are to be merged. As a
+     * consequence this information has to be passed onto this function as well
+     * (besides the resulting merge).
+     * @param amrs the list of AMR graphs from which the map should be extracted
+     * @return the ((sibling, sibling) → merge) map
+     */
+    public static Map<String, String> getMergeSiblingMap(List<Amr> amrs) {
+        Map<String, String> ret = new HashMap<>();
+        Map<String, Map<String, Integer>> mergeCounts = new HashMap<>();
+
+        for (Amr amr : amrs) {
+            for (Vertex v : amr.dag) {
+                // only for vertices that have a parent
+                if (!v.getIncomingEdges().isEmpty()) {
+                    // determine if there are 2 siblings that can be merged and
+                    // return these vertices' instances alongside their merge
+                    List<String> mergePair =
+                        GoldTransitions.getGoldMergeSibling(amr, v);
+
+                    if (mergePair != null) {
+                        // the 2 siblings that are to be merged
+                        String key = mergePair.get(0);
+                        // their merge
+                        String result = mergePair.get(1);
+
+                        if (!mergeCounts.containsKey(key)) {
+                            mergeCounts.put(key, new HashMap<>());
+                        }
+
+                        Map<String, Integer> resultCount = mergeCounts.get(key);
+                        resultCount.put(
+                            result, resultCount.getOrDefault(result, 0) + 1);
+                    }
+                }
+            }
+        }
+
+        for (String key : mergeCounts.keySet()) {
+            String result = Collections
+                                .max(mergeCounts.get(key).entrySet(),
+                                    Entry.comparingByValue())
+                                .getKey();
+            ret.put(key, result);
+        }
+
+        return ret;
+    }
+
+    /**
      * Extracts from a corpus of AMR graphs a duplicate-free list of all
      * observed concepts.
      * @param amrs the list of AMR graphs from which the list should be
