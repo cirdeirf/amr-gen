@@ -1166,10 +1166,12 @@ class CommandGenerate {
             + "This is only possible if the AMR graphs are stored with tokenized reference realizations in the input file.")
     Boolean printOutputToStdout = false;
 
-    @Parameter(names = {"--train", "-t"}, description = "Train given models.")
+    @Parameter(names = {"--train", "-t"},
+        description = "Train given models (specified in AmrMain constructor).")
     Boolean train = false;
 
-    @Parameter(
-        names = {"--reinforce", "-r"}, description = "Reinforce given models.")
+    @Parameter(names = {"--reinforce", "-r"},
+        description =
+            "Reinforce given models (specified in AmrMain constructor).")
     Boolean reinforce = false;
 }
