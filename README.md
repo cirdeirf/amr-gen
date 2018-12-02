@@ -61,6 +61,9 @@ For using the command line interface, the following parameters may be specified:
   generated sentence) are printed to the standard output stream when the
   generator is finished. Again, this is only possible if the AMR graphs are
   stored with tokenized reference realizations in the input file.
+- `--train` (`-t`): Train given models (specified in AmrMain constructor).
+- `-mergemap` (`-m`): Extract a map mapping each mergeable sibling pair to the
+  corresponding merged vertex oberserved most often from the training set.
 
 **Important**: Note that the generation process requires around 8GB of RAM.
 Therefore, the generator should always be run with `-Xmx8g` or more.
@@ -223,6 +226,12 @@ contents:
   training, this file contains the resulting (realization,pos)-tuple observed
   most often, e.g. `(long, more) → (longer, JJ)`. It was obtained using the
   `getMergeMap(List<Amr> amrs)` method of `misc.StaticHelper`.
+- **res/mergesiblingmap.txt**: For each pair of sibling vertices that has been
+  merged during training, this file contains the resulting
+  (realization,pos)-tuple observed most often, e.g. `(-, ever) → (never, JJ)`.
+  It was obtained using the `getMergeSiblingMap(List<Amr> amrs)` method of
+  `misc.StaticHelper` which can be executed using the `--merge` command line
+  option.
 - **res/namedentities.txt**: This file stores realizations observed for named
   entities during training along with the number of times these realizations
   have been observed.
