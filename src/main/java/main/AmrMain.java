@@ -42,17 +42,17 @@ public class AmrMain {
     private boolean setUp = false;
 
     public static void main(String[] args) throws IOException, JWNLException {
-        args = new String[] {"-i", "in1.txt", "-o", "out1.txt"};
+        // args = new String[] {"-i", "in1.txt", "-o", "out1.txt"};
 
         Amr.setUp();
         AmrMain main = new AmrMain(args);
 
-        System.in.read();
-        main.demo1();
-        System.in.read();
-        main.demo2();
-        System.in.read();
-        main.demo3();
+        // System.in.read();
+        // main.demo1();
+        // System.in.read();
+        // main.demo2();
+        // System.in.read();
+        // main.demo3();
     }
 
     // generates a sentence from the "the developer wants to sleep" AMR graph
@@ -485,10 +485,17 @@ public class AmrMain {
         Debugger.println("starting second-stage processing of " + amrs.size()
             + " AMR graphs...");
 
+        int perc = 0;
         for (Amr amr : amrs) {
+            if (amrs.indexOf(amr) % (int) ((double) amrs.size() / 9 + 1) == 0) {
+                perc += 10;
+                Debugger.println(perc + "%");
+            }
             generatedSentences.add(
                 secondStageProcessor.getBestRealizationAsString(amr));
         }
+        if (perc < 100)
+            Debugger.println("100%");
 
         Debugger.println("finished second-stage processing of " + amrs.size()
             + " AMR graphs.");

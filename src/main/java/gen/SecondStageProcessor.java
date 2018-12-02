@@ -29,7 +29,10 @@ public class SecondStageProcessor {
     // efficiency as it reduces the number of times the language model has to be
     // queried
     private static Map<List<String>, Float> nGramScores = new HashMap<>();
-    // TODO stores a number of predictions that are rescored together
+
+    // TODO uncomment to rescore every single candidate
+    // // used to gather multiple candidates for rescoring in a batch (instead
+    // of // sending only single sentences to the neural network language model)
     // private static ArrayList<Prediction> rescorePredictions = new
     // ArrayList<>();
 
@@ -382,7 +385,7 @@ public class SecondStageProcessor {
                             realizationPrediction);
                     }
 
-                    // TODO
+                    // TODO uncomment to rescore every single candidate
                     // PrunedList newBestOrderRealizations =
                     //     new PrunedList(maxNrOfComposedPredictions);
                     // int listSize = rescorePredictions.size();
@@ -398,7 +401,6 @@ public class SecondStageProcessor {
                     // bestOrderRealizations = newBestOrderRealizations;
 
                     // rescorePredictions.clear();
-                    // TODO
 
                     for (Prediction p : bestOrderRealizations) {
                         double orderingScore = reorderingWeight
@@ -625,9 +627,8 @@ public class SecondStageProcessor {
                             p2.partialTransitionFunction);
                         ret.add(p);
 
-                        // TODO
+                        // TODO uncomment to rescore every single candidate
                         // rescorePredictions.add(p);
-                        // TODO
                     }
                 }
             }
@@ -1062,6 +1063,7 @@ public class SecondStageProcessor {
      * Helper function to rescore a list of predictions using a neural network
      * language model.
      * @param predictions the list of predictions to be rescored
+     * @return the input predictions with a new language model score
      */
     private ArrayList<Prediction> rescore(ArrayList<Prediction> predictions) {
         ArrayList<Prediction> rescoredPredictions =
