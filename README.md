@@ -61,9 +61,13 @@ For using the command line interface, the following parameters may be specified:
   generated sentence) are printed to the standard output stream when the
   generator is finished. Again, this is only possible if the AMR graphs are
   stored with tokenized reference realizations in the input file.
+- `--train` (`-t`): Train given models (specified in AmrMain constructor).
+- `--reinforce` (`-r`): Reinforce given models (specified in AmrMain
+  constructor).
 
 **Important**: Note that the generation process requires around 8GB of RAM.
-Therefore, the generator should always be run with `-Xmx8g` or more.
+Therefore, the generator should always be run with `-Xmx8g` or more (reinforcing
+requires for some models even 12GB of RAM).
 
 ### Examples
 
