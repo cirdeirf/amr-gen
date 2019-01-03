@@ -173,7 +173,7 @@ modelsToTrain, boolean stopAfterFirstStage)` method provided by `main.AmrMain`.
 results requires certain versions and configurations of the tools given above.
 Unfortunately, these details are not available anymore, except that, for
 tokenization, POS tagging and dependency parsing, the preprocessing script of
-[CAMR] (https://github.com/c-amr/camr) (see Section Preprocessing) has been
+[CAMR](https://github.com/c-amr/camr/) (see Section Preprocessing) has been
 utilized.
 
 **Important**: Note that the training process requires around 8GB of RAM and may
