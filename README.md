@@ -172,6 +172,13 @@ To change the naming conventions, edit the corresponding entries in
 `main.PathList`. To retrain only specific models, use the `setUp(List<Models>
 modelsToTrain, boolean stopAfterFirstStage)` method provided by `main.AmrMain`.
 
+**Important**: Preprocessing the AMR corpus in order to obtain the reported
+results requires certain versions and configurations of the tools given above.
+Unfortunately, these details are not available anymore, except that, for
+tokenization, POS tagging and dependency parsing, the preprocessing script of
+[CAMR] (https://github.com/c-amr/camr) (see Section Preprocessing) has been
+utilized.
+
 **Important**: Note that the training process requires around 8GB of RAM and may
 take several hours to days. Therefore, it should always be run with `-Xmx8g` or
 more.
